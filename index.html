@@ -1,0 +1,1734 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>HockeyVivo Coach</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0A0A0A">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@300;400;500;600;700&family=Barlow+Condensed:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+<style>
+/* ═══ RESET ═══ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{background:#0A0A0A;color:#F5F5F5;font-family:'Barlow',sans-serif;min-height:100vh;min-height:100dvh;overflow:hidden}
+button{background:transparent;border:0;cursor:pointer;font-family:inherit;color:inherit;padding:0}
+input,select{font-family:inherit}
+
+/* ═══ TYPOGRAPHY ═══ */
+.label{font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.14em;font-weight:500}
+.num{font-family:'Bebas Neue',sans-serif;font-weight:400;letter-spacing:.01em;line-height:.9}
+.muted{color:#6B6B6B}
+.accent{color:#E63946}
+
+/* ═══ SCREENS ═══ */
+.screen{display:none;flex-direction:column;position:fixed;top:0;left:0;right:0;bottom:0;background:#0A0A0A;z-index:1}
+.screen.active{display:flex}
+
+/* ═══ SCREEN HEADER ═══ */
+.screen-header{display:flex;align-items:flex-end;justify-content:space-between;padding:48px 20px 16px;flex-shrink:0}
+.screen-header h1{font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:.02em;line-height:.9}
+.screen-header .subtitle{font-family:'Barlow Condensed',sans-serif;color:#6B6B6B;text-transform:uppercase;letter-spacing:.16em;font-size:11px;margin-top:4px}
+
+/* ═══ SCROLL ═══ */
+.scroll-content{flex:1;overflow-y:auto;padding:0 20px 100px;-webkit-overflow-scrolling:touch}
+.scroll-content::-webkit-scrollbar{display:none}
+.scroll-content{scrollbar-width:none}
+
+/* ═══ TAB BAR ═══ */
+.tab-bar{position:fixed;bottom:0;left:0;right:0;height:72px;background:#0A0A0A;border-top:1px solid #1a1a1a;display:flex;align-items:center;justify-content:space-around;padding-bottom:env(safe-area-inset-bottom,0);z-index:50}
+.tab-btn{display:flex;flex-direction:column;align-items:center;gap:3px;font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.14em;font-size:10px;color:#6B6B6B;padding:8px 16px}
+.tab-btn.active{color:#F5F5F5}
+.tab-btn svg{width:22px;height:22px}
+.tab-dot{width:3px;height:3px;background:#E63946;border-radius:50%;opacity:0}
+.tab-btn.active .tab-dot{opacity:1}
+
+/* ═══ BUTTONS ═══ */
+.btn-primary{background:#E63946;color:#0A0A0A;font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.12em;font-size:14px;padding:14px 24px;border-radius:8px;width:100%;text-align:center}
+.btn-primary:active{background:#FF4D5E;transform:scale(.98)}
+.btn-ghost{background:transparent;border:1px solid #262626;color:#F5F5F5;font-family:'Barlow Condensed',sans-serif;font-weight:500;text-transform:uppercase;letter-spacing:.12em;font-size:13px;padding:12px 20px;border-radius:8px;width:100%;text-align:center}
+.btn-ghost:active{background:#1a1a1a}
+.btn-icon{width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#E63946;color:#0A0A0A;flex-shrink:0}
+
+/* ═══ INPUTS ═══ */
+.input-group{margin-bottom:16px}
+.input-group label{display:block;font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.14em;font-size:11px;color:#6B6B6B;margin-bottom:6px}
+.input-group input,.input-group select{width:100%;background:#111;border:1px solid #262626;color:#F5F5F5;padding:12px 14px;border-radius:8px;font-size:15px;outline:none}
+.input-group input:focus,.input-group select:focus{border-color:#E63946}
+.input-group select{appearance:none}
+
+/* ═══ COLOR PICKER ═══ */
+.color-options{display:flex;gap:10px;flex-wrap:wrap}
+.color-dot{width:36px;height:36px;border-radius:50%;border:2px solid transparent;cursor:pointer}
+.color-dot.selected{border-color:#F5F5F5;box-shadow:0 0 0 2px #E63946}
+
+/* ═══ AVATAR ═══ */
+.avatar{width:40px;height:40px;border-radius:50%;background:#1f1f1f;color:#E63946;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.avatar-lg{width:64px;height:64px;font-size:24px}
+
+/* ═══ BACK BUTTON ═══ */
+.back-btn{display:inline-flex;align-items:center;gap:6px;font-family:'Barlow Condensed',sans-serif;font-size:13px;text-transform:uppercase;letter-spacing:.1em;color:#6B6B6B;padding:8px 0}
+.back-btn:active{color:#F5F5F5}
+
+/* ═══ EMPTY STATE ═══ */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;padding:40px 20px;text-align:center}
+.empty-state .icon{font-size:48px;margin-bottom:16px;opacity:.5}
+.empty-state h2{font-family:'Barlow Condensed',sans-serif;font-weight:600;text-transform:uppercase;letter-spacing:.08em;font-size:18px;margin-bottom:8px}
+.empty-state p{color:#6B6B6B;font-size:14px;max-width:260px}
+
+/* ═══ TEAM CARD ═══ */
+.team-card{display:flex;align-items:center;gap:14px;padding:16px;background:#111;border:1px solid #1a1a1a;border-radius:12px;margin-bottom:10px;cursor:pointer}
+.team-card:active{background:#1a1a1a}
+.team-color{width:6px;height:44px;border-radius:3px;flex-shrink:0}
+.team-info{flex:1}
+.team-name{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:16px;text-transform:uppercase;letter-spacing:.06em}
+.team-meta{font-family:'Barlow Condensed',sans-serif;font-size:11px;color:#6B6B6B;text-transform:uppercase;letter-spacing:.12em;margin-top:3px}
+.team-arrow{color:#6B6B6B;font-size:18px}
+
+/* ═══ PLAYER ROW ═══ */
+.player-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #1a1a1a;cursor:pointer}
+.player-row:active{opacity:.7}
+.player-info{flex:1;min-width:0}
+.player-name{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:15px;letter-spacing:.04em}
+.player-meta{font-family:'Barlow Condensed',sans-serif;font-size:11px;color:#6B6B6B;text-transform:uppercase;letter-spacing:.12em;margin-top:2px}
+.player-number{font-family:'Bebas Neue',sans-serif;font-size:20px;color:#6B6B6B;min-width:28px;text-align:center}
+
+/* ═══ TEST CARD ═══ */
+.test-card{display:flex;align-items:center;gap:14px;padding:16px;background:#111;border:1px solid #1a1a1a;border-radius:12px;margin-bottom:10px;cursor:pointer}
+.test-card:active{background:#1a1a1a}
+.test-icon{width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:24px;background:#1a1a1a;border-radius:10px}
+.test-info{flex:1}
+.test-name{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:15px;text-transform:uppercase;letter-spacing:.06em}
+.test-desc{font-size:12px;color:#6B6B6B;margin-top:2px}
+
+/* ═══ HISTORY ROW ═══ */
+.hist-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #1a1a1a}
+.hist-date{font-family:'Barlow Condensed',sans-serif;font-size:12px;color:#6B6B6B;text-transform:uppercase;letter-spacing:.08em}
+.hist-value{font-family:'Bebas Neue',sans-serif;font-size:24px;color:#FFD600}
+.hist-test{font-family:'Barlow Condensed',sans-serif;font-size:11px;color:#6B6B6B;text-transform:uppercase;letter-spacing:.1em}
+
+/* ═══ SPARK CHART ═══ */
+.spark-container{background:#111;border:1px solid #1a1a1a;border-radius:10px;padding:16px;margin-top:12px}
+.spark-container canvas{width:100%;height:120px}
+
+/* ═══ PROFILE HEADER ═══ */
+.profile-header{display:flex;align-items:center;gap:14px;padding:16px 0}
+.profile-header img{width:56px;height:56px;border-radius:50%;object-fit:cover}
+
+/* ═══ LOGIN ═══ */
+#screen-login{align-items:center;justify-content:center;gap:24px;padding:40px}
+.login-logo{font-family:'Bebas Neue',sans-serif;font-size:48px;letter-spacing:.04em;text-align:center;line-height:1}
+.login-badge{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:.3em;color:#E63946;text-align:center;margin-top:-8px}
+.login-sub{font-family:'Barlow Condensed',sans-serif;color:#6B6B6B;text-transform:uppercase;letter-spacing:.16em;font-size:12px;text-align:center}
+
+/* ═══ CHALLENGE SCREEN ═══ */
+#screen-challenge{background:#000}
+#screen-challenge video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
+.canvas-overlay{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;pointer-events:none}
+.challenge-hud{position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;padding:12px 16px;z-index:10;pointer-events:none}
+.challenge-hud>*{pointer-events:all}
+.hud-counter{font-family:'Bebas Neue',sans-serif;font-size:72px;color:#FFD600;text-shadow:0 2px 8px rgba(0,0,0,.8);line-height:1}
+.hud-timer{font-family:'Bebas Neue',sans-serif;font-size:36px;color:#F5F5F5;text-shadow:0 2px 8px rgba(0,0,0,.8);line-height:1}
+.hud-timer.warning{color:#FF6B00}
+.hud-timer.urgent{color:#E63946}
+.status-bar{position:absolute;bottom:16px;left:16px;right:16px;background:rgba(0,0,0,.7);color:#F5F5F5;font-family:'Barlow Condensed',sans-serif;font-size:14px;letter-spacing:.06em;padding:10px 16px;border-radius:8px;text-align:center;z-index:10}
+.status-bar.detected{border:1px solid rgba(57,255,20,.3)}
+.challenge-btn{position:absolute;bottom:60px;left:50%;transform:translateX(-50%);z-index:10;background:#E63946;color:#0A0A0A;font-family:'Barlow Condensed',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.14em;font-size:18px;padding:14px 32px;border-radius:10px}
+.challenge-btn:active{background:#FF4D5E}
+#btn-skip-calib{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:10;background:rgba(0,0,0,.6);color:#6B6B6B;font-family:'Barlow Condensed',sans-serif;font-size:12px;letter-spacing:.1em;text-transform:uppercase;padding:6px 14px;border-radius:6px;border:1px solid #333}
+#btn-remark-cones{position:absolute;top:12px;right:12px;z-index:10;background:rgba(0,0,0,.6);color:#FF9A00;font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding:6px 12px;border-radius:6px;border:1px solid #333}
+#btn-back-challenge{position:absolute;top:12px;left:12px;z-index:10;background:rgba(0,0,0,.6);color:#F5F5F5;font-size:20px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:50%}
+.countdown-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);z-index:20}
+.countdown-num{font-family:'Bebas Neue',sans-serif;font-size:120px;color:#FFD600;animation:countPop .8s ease-out}
+@keyframes countPop{0%{transform:scale(2);opacity:0}50%{transform:scale(1);opacity:1}100%{opacity:1}}
+
+/* ═══ ROTATE OVERLAY ═══ */
+.rotate-overlay{display:none;position:fixed;inset:0;background:#0A0A0A;z-index:100;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:#F5F5F5;font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.14em;font-size:14px}
+.rotate-icon{font-size:48px;animation:rwiggle 2s ease-in-out infinite}
+@keyframes rwiggle{0%,100%{transform:rotate(0)}25%{transform:rotate(15deg)}75%{transform:rotate(-15deg)}}
+
+/* ═══ RESULT ═══ */
+.result-big{font-family:'Bebas Neue',sans-serif;font-size:96px;color:#FFD600;line-height:1;text-align:center}
+.correction-btns{display:flex;align-items:center;justify-content:center;gap:24px;margin:20px 0}
+.correction-btn{width:56px;height:56px;border-radius:50%;background:#1a1a1a;border:1px solid #333;color:#F5F5F5;font-family:'Bebas Neue',sans-serif;font-size:28px;display:flex;align-items:center;justify-content:center}
+.correction-btn:active{background:#262626}
+
+/* ═══ TOAST ═══ */
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#1a1a1a;border:1px solid #333;color:#F5F5F5;font-family:'Barlow Condensed',sans-serif;font-size:13px;padding:10px 20px;border-radius:8px;z-index:200;display:none;white-space:nowrap}
+.toast.show{display:block;animation:toastin .3s ease}
+@keyframes toastin{from{opacity:0;transform:translateX(-50%) translateY(10px)}}
+
+/* ═══ SPINNER ═══ */
+.spinner{width:24px;height:24px;border:2px solid #333;border-top-color:#E63946;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.divider{height:1px;background:#1a1a1a;margin:12px 0}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════ LOGIN ═══════════════════════════ -->
+<div id="screen-login" class="screen active">
+  <div class="login-logo">HOCKEY<span class="accent">VIVO</span></div>
+  <div class="login-badge">COACH</div>
+  <p class="login-sub">Evalua a tus jugadoras con IA</p>
+  <button onclick="loginWithGoogle()" class="btn-primary" style="max-width:300px">INICIAR CON GOOGLE</button>
+  <div id="login-spinner" class="spinner" style="display:none"></div>
+  <p id="login-error" style="color:#E63946;font-size:13px;display:none"></p>
+</div>
+
+<!-- ═══════════════════════ ONBOARDING ═════════════════════════ -->
+<div id="screen-onboarding" class="screen">
+  <div style="padding:60px 24px 40px;overflow-y:auto;flex:1">
+    <h1 class="num" style="font-size:36px">BIENVENIDO</h1>
+    <p id="onb-name" class="muted" style="margin-top:8px"></p>
+    <div class="input-group" style="margin-top:32px">
+      <label>NOMBRE DEL CLUB</label>
+      <input id="onb-club" type="text" placeholder="Ej: Club Atletico San Isidro">
+    </div>
+    <button onclick="saveOnboarding()" class="btn-primary" style="margin-top:16px">CONTINUAR</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════ TEAMS ══════════════════════════════ -->
+<div id="screen-teams" class="screen">
+  <div class="screen-header">
+    <div>
+      <h1>EQUIPOS</h1>
+      <div class="subtitle" id="teams-club"></div>
+    </div>
+    <button class="btn-icon" onclick="goTo('screen-create-team')" aria-label="Crear equipo">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="10" y1="3" x2="10" y2="17"/><line x1="3" y1="10" x2="17" y2="10"/></svg>
+    </button>
+  </div>
+  <div id="teams-list" class="scroll-content"></div>
+</div>
+
+<!-- ═══════════════════ CREATE TEAM ════════════════════════════ -->
+<div id="screen-create-team" class="screen">
+  <div style="padding:48px 20px 40px;overflow-y:auto;flex:1">
+    <button class="back-btn" onclick="goTo('screen-teams')">&#8592; EQUIPOS</button>
+    <h1 class="num" style="font-size:32px;margin-top:12px">NUEVO EQUIPO</h1>
+    <div class="input-group" style="margin-top:24px">
+      <label>NOMBRE</label>
+      <input id="ct-nombre" type="text" placeholder="Ej: Sub-14 Femenino">
+    </div>
+    <div class="input-group">
+      <label>COLOR</label>
+      <div id="ct-colors" class="color-options"></div>
+    </div>
+    <button onclick="createTeam()" class="btn-primary" style="margin-top:24px">CREAR EQUIPO</button>
+    <p id="ct-error" style="color:#E63946;font-size:13px;margin-top:8px;display:none"></p>
+  </div>
+</div>
+
+<!-- ═══════════════════════ ROSTER ═════════════════════════════ -->
+<div id="screen-roster" class="screen">
+  <div class="screen-header">
+    <div>
+      <button class="back-btn" onclick="goTo('screen-teams')">&#8592; EQUIPOS</button>
+      <h1 id="roster-team-name"></h1>
+    </div>
+    <button class="btn-icon" onclick="goTo('screen-add-player')" aria-label="Agregar jugadora">
+      <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="10" y1="3" x2="10" y2="17"/><line x1="3" y1="10" x2="17" y2="10"/></svg>
+    </button>
+  </div>
+  <div id="roster-list" class="scroll-content"></div>
+</div>
+
+<!-- ═══════════════════ ADD PLAYER ═════════════════════════════ -->
+<div id="screen-add-player" class="screen">
+  <div style="padding:48px 20px 40px;overflow-y:auto;flex:1">
+    <button class="back-btn" onclick="goTo('screen-roster')">&#8592; PLANTEL</button>
+    <h1 class="num" style="font-size:32px;margin-top:12px">NUEVA JUGADORA</h1>
+    <div class="input-group" style="margin-top:24px">
+      <label>NOMBRE</label>
+      <input id="ap-nombre" type="text" placeholder="Maria">
+    </div>
+    <div class="input-group">
+      <label>APELLIDO</label>
+      <input id="ap-apellido" type="text" placeholder="Gonzalez">
+    </div>
+    <div class="input-group">
+      <label>FECHA DE NACIMIENTO</label>
+      <input id="ap-dob" type="date">
+    </div>
+    <div style="display:flex;gap:12px">
+      <div class="input-group" style="flex:1">
+        <label>POSICION</label>
+        <select id="ap-pos">
+          <option value="">--</option>
+          <option value="ARQ">ARQ</option>
+          <option value="DEF">DEF</option>
+          <option value="MED">MED</option>
+          <option value="DEL">DEL</option>
+        </select>
+      </div>
+      <div class="input-group" style="flex:1">
+        <label>NUMERO</label>
+        <input id="ap-num" type="number" min="1" max="99" placeholder="#">
+      </div>
+    </div>
+    <button onclick="addPlayer()" class="btn-primary" style="margin-top:24px">AGREGAR</button>
+    <p id="ap-error" style="color:#E63946;font-size:13px;margin-top:8px;display:none"></p>
+  </div>
+</div>
+
+<!-- ═══════════════════ PLAYER PROFILE ═════════════════════════ -->
+<div id="screen-player" class="screen">
+  <div style="padding:48px 20px 0;flex-shrink:0">
+    <button class="back-btn" onclick="goTo('screen-roster')">&#8592; PLANTEL</button>
+  </div>
+  <div class="scroll-content" style="padding-top:8px">
+    <div id="player-header"></div>
+    <div id="player-stats" style="margin-top:12px"></div>
+    <div id="player-chart"></div>
+    <div style="margin-top:16px">
+      <div class="label muted" style="font-size:11px;margin-bottom:8px">HISTORIAL</div>
+      <div id="player-history"></div>
+    </div>
+  </div>
+  <div style="padding:12px 20px calc(12px + env(safe-area-inset-bottom,0px));flex-shrink:0">
+    <button onclick="startEval()" class="btn-primary">EVALUAR</button>
+  </div>
+</div>
+
+<!-- ═══════════════════ TEST SELECTION ═════════════════════════ -->
+<div id="screen-tests" class="screen">
+  <div style="padding:48px 20px 40px;overflow-y:auto;flex:1">
+    <button class="back-btn" onclick="goTo('screen-player')">&#8592; PERFIL</button>
+    <h1 class="num" style="font-size:32px;margin-top:12px">ELEGIR TEST</h1>
+    <p id="test-player-name" class="muted" style="margin-top:4px"></p>
+    <div id="tests-list" style="margin-top:24px"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ CHALLENGE ══════════════════════════ -->
+<div id="screen-challenge" class="screen">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="canvas-overlay" class="canvas-overlay"></canvas>
+  <div class="challenge-hud">
+    <div>
+      <div id="hud-counter" class="hud-counter">0</div>
+      <div class="label" style="font-size:10px;color:#FFD600;opacity:.7">OCHOS</div>
+    </div>
+    <div style="text-align:right">
+      <div id="hud-timer" class="hud-timer">90</div>
+      <div class="label" style="font-size:10px;opacity:.7">SEG</div>
+    </div>
+  </div>
+  <button id="btn-back-challenge" onclick="abortChallenge()">&#10005;</button>
+  <button id="btn-remark-cones" onclick="restartConeMarking()" style="display:none">REMARCAR CONOS</button>
+  <button id="btn-skip-calib" onclick="saltarCalibracion()" style="display:none">SALTAR</button>
+  <button id="btn-start-challenge" class="challenge-btn" onclick="startCountdown()" style="display:none">COMENZAR</button>
+  <div id="countdown-overlay" class="countdown-overlay" style="display:none">
+    <div id="countdown-num" class="countdown-num"></div>
+  </div>
+  <div id="status-bar" class="status-bar"></div>
+</div>
+
+<!-- ═══════════════════════ RESULT ═════════════════════════════ -->
+<div id="screen-result" class="screen">
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px">
+    <div class="label muted" style="font-size:12px">RESULTADO</div>
+    <div id="result-test-name" class="label" style="font-size:14px;margin-top:4px"></div>
+    <div id="result-player" class="muted" style="font-size:13px;margin-top:8px"></div>
+    <div id="result-count" class="result-big" style="margin-top:24px">0</div>
+    <div class="label muted" style="font-size:11px;margin-top:4px">OCHOS EN <span id="result-duration">90</span>s</div>
+    <div class="correction-btns">
+      <button class="correction-btn" onclick="correctResult(-1)">&minus;</button>
+      <div id="result-final" class="num" style="font-size:48px;min-width:60px;text-align:center">0</div>
+      <button class="correction-btn" onclick="correctResult(1)">+</button>
+    </div>
+    <div id="result-corrected" class="muted" style="font-size:11px;display:none">CORREGIDO MANUALMENTE</div>
+    <div style="width:100%;max-width:300px;margin-top:32px">
+      <button onclick="saveEvaluacion()" class="btn-primary">GUARDAR RESULTADO</button>
+      <button onclick="discardResult()" class="btn-ghost" style="margin-top:10px">DESCARTAR</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ SETTINGS ═══════════════════════════ -->
+<div id="screen-settings" class="screen">
+  <div class="screen-header"><h1>PERFIL</h1></div>
+  <div class="scroll-content">
+    <div id="settings-profile"></div>
+    <div class="divider" style="margin:20px 0"></div>
+    <button onclick="logout()" class="btn-ghost" style="color:#E63946;border-color:#E63946">CERRAR SESION</button>
+  </div>
+</div>
+
+<!-- ═══════════════════ ROTATE OVERLAY ═════════════════════════ -->
+<div id="rotate-overlay" class="rotate-overlay">
+  <div class="rotate-icon">&#128241;</div>
+  <div>GIRA EL TELEFONO</div>
+</div>
+
+<!-- ═══════════════════════ TOAST ══════════════════════════════ -->
+<div id="toast" class="toast"></div>
+
+<!-- ═══════════════════════ TAB BAR ════════════════════════════ -->
+<div id="tab-bar" class="tab-bar" style="display:none">
+  <button class="tab-btn active" onclick="switchTab('teams')" id="tab-teams">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+    <span>Equipos</span><div class="tab-dot"></div>
+  </button>
+  <button class="tab-btn" onclick="switchTab('settings')" id="tab-settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M6 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/></svg>
+    <span>Perfil</span><div class="tab-dot"></div>
+  </button>
+</div>
+
+<noscript>Esta app necesita JavaScript para funcionar.</noscript>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════════════════════════
+const SUPABASE_URL  = 'https://unecxdrjiwuqzlqqfjrt.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVuZWN4ZHJqaXd1cXpscXFmanJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxNjEyNjEsImV4cCI6MjA5NDczNzI2MX0.PABTKHGCNBiYA4VzPKgaV9cx2D8frM6eA7sU4D9urIs';
+
+const TESTS = [
+  { id: 'T1_OCHOS', code: 'T1', name: 'DOMINIO', sub: 'Ochos', duration: 90, kpi: 'Ochos / 90s', icon: '\u221E' }
+];
+const TEAM_COLORS = ['#E63946','#457B9D','#2A9D8F','#E9C46A','#F4A261','#264653','#6A4C93','#1D3557'];
+
+// ═══════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════
+let sb = null;               // supabase client
+let currentUser = null;
+let coachProfile = null;
+let teams = [];
+let currentTeam = null;
+let roster = [];
+let currentPlayer = null;    // ficha from fichas_jugadoras
+let selectedTest = null;
+let playerEvals = [];
+
+// Camera / detection
+let videoEl = null;
+let overlayCanvas = null;
+let overlayCtx = null;
+let stream = null;
+let animFrame = null;
+let timerInterval = null;
+
+// Challenge
+let eightCount = 0;
+let timeLeft = 90;
+let challengeActive = false;
+let positions = [];
+const MAX_TRAIL = 60;
+let resultadoIA = 0;
+let resultadoPrincipal = 0;
+let corregido = false;
+
+// Cones
+let coneA = null;
+let coneB = null;
+let conesMarked = false;
+let coneMarkingStep = 0;
+
+// Eight detection
+let pathPoints = [];
+const PATH_MAX = 150;
+let eightState = 0;
+let firstConeVisited = null;
+let centerCrossings = 0;
+let verticalRangeInState = { minY: Infinity, maxY: -Infinity };
+let lastCenterSide = null;
+let stateStartTime = 0;
+let lastEightTime = 0;
+const eightCooldown = 300;
+const STATE_TIMEOUT = 12000;
+let lastBallMoveTime = 0;
+
+// Tracker
+let trackedBall = null;
+let lostFrames = 0;
+let lastDetectedTime = 0;
+
+// Model
+let cocoModel = null;
+let modelLoading = false;
+let lastDetections = [];
+
+// Sound
+let audioCtx = null;
+
+// Ball calibration
+window._calibBocha = { activa: false, hecha: false, muestras: [], inicio: 0 };
+
+// ═══════════════════════════════════════════════════════════════
+//  LOW-END DEVICE DETECTION
+// ═══════════════════════════════════════════════════════════════
+(function() {
+  const isAndroid = /android/i.test(navigator.userAgent);
+  const cores = navigator.hardwareConcurrency || 4;
+  window.IS_LOW_END = isAndroid && cores < 6;
+  if (window.IS_LOW_END) console.warn('[COACH] Low-end device detected');
+})();
+
+// ═══════════════════════════════════════════════════════════════
+//  UTILITIES
+// ═══════════════════════════════════════════════════════════════
+function showToast(msg, ms) {
+  ms = ms || 2500;
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show';
+  setTimeout(function() { t.className = 'toast'; }, ms);
+}
+
+function formatDate(iso) {
+  if (!iso) return '\u2014';
+  return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function calcAge(dob) {
+  if (!dob) return '';
+  var d = new Date(dob), now = new Date();
+  var age = now.getFullYear() - d.getFullYear();
+  if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) age--;
+  return age;
+}
+
+function initials(nombre, apellido) {
+  return ((nombre || '')[0] || '').toUpperCase() + ((apellido || '')[0] || '').toUpperCase();
+}
+
+function escHtml(s) {
+  var d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  NAVIGATION
+// ═══════════════════════════════════════════════════════════════
+var TAB_SCREENS = ['screen-teams', 'screen-settings'];
+
+function goTo(id) {
+  document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
+  var el = document.getElementById(id);
+  if (el) el.classList.add('active');
+
+  var tabBar = document.getElementById('tab-bar');
+  tabBar.style.display = TAB_SCREENS.indexOf(id) >= 0 ? 'flex' : 'none';
+
+  document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+  if (id === 'screen-teams') document.getElementById('tab-teams').classList.add('active');
+  if (id === 'screen-settings') document.getElementById('tab-settings').classList.add('active');
+
+  if (id === 'screen-teams') loadTeams();
+  if (id === 'screen-settings') renderSettings();
+  if (id === 'screen-create-team') renderColorPicker();
+  if (id === 'screen-roster') loadRoster();
+  if (id === 'screen-player') loadPlayerProfile();
+  if (id === 'screen-tests') renderTests();
+}
+
+function switchTab(tab) {
+  if (tab === 'teams') goTo('screen-teams');
+  if (tab === 'settings') goTo('screen-settings');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SUPABASE AUTH
+// ═══════════════════════════════════════════════════════════════
+async function initApp() {
+  if (!window.supabase) {
+    document.getElementById('login-error').textContent = 'Error: Supabase no cargo';
+    document.getElementById('login-error').style.display = 'block';
+    return;
+  }
+
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storage: window.localStorage
+    }
+  });
+
+  var sess = await sb.auth.getSession();
+  if (sess.data.session) {
+    currentUser = sess.data.session.user;
+    await handleAuth();
+  }
+
+  sb.auth.onAuthStateChange(async function(event, session) {
+    if (event === 'SIGNED_IN' && session) {
+      currentUser = session.user;
+      await handleAuth();
+    } else if (event === 'SIGNED_OUT') {
+      currentUser = null;
+      coachProfile = null;
+      stopCameraIfRunning();
+      goTo('screen-login');
+    }
+  });
+}
+
+async function loginWithGoogle() {
+  document.getElementById('login-spinner').style.display = 'block';
+  document.getElementById('login-error').style.display = 'none';
+  var res = await sb.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin + window.location.pathname }
+  });
+  if (res.error) {
+    document.getElementById('login-spinner').style.display = 'none';
+    document.getElementById('login-error').textContent = res.error.message;
+    document.getElementById('login-error').style.display = 'block';
+  }
+}
+
+async function handleAuth() {
+  if (!currentUser) return;
+
+  // 1. Check/create usuario — if exists, DON'T touch it
+  var uRes = await sb.from('usuarios').select('id').eq('id', currentUser.id).maybeSingle();
+  if (!uRes.data) {
+    var meta = currentUser.user_metadata || {};
+    var fullName = (meta.full_name || meta.name || '').trim();
+    var parts = fullName.split(/\s+/);
+    await sb.from('usuarios').insert({
+      id: currentUser.id,
+      nombre: parts[0] || '',
+      apellido: parts.slice(1).join(' ') || '',
+      email: currentUser.email,
+      foto_url: meta.avatar_url || null
+    });
+  }
+
+  // 2. Check/load coach
+  var cRes = await sb.from('coaches').select('*').eq('id', currentUser.id).maybeSingle();
+  if (!cRes.data) {
+    var meta2 = currentUser.user_metadata || {};
+    document.getElementById('onb-name').textContent = meta2.full_name || meta2.name || currentUser.email;
+    goTo('screen-onboarding');
+    return;
+  }
+
+  coachProfile = cRes.data;
+  goTo('screen-teams');
+}
+
+async function saveOnboarding() {
+  var club = document.getElementById('onb-club').value.trim();
+  if (!club) { showToast('Ingresa el nombre del club'); return; }
+
+  var res = await sb.from('coaches').insert({ id: currentUser.id, club_texto: club }).select().single();
+  if (res.error) { showToast('Error: ' + res.error.message); return; }
+  coachProfile = res.data;
+  goTo('screen-teams');
+}
+
+async function logout() { await sb.auth.signOut(); }
+
+function stopCameraIfRunning() {
+  if (stream) { stream.getTracks().forEach(function(t) { t.stop(); }); stream = null; }
+  if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  challengeActive = false;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  TEAMS
+// ═══════════════════════════════════════════════════════════════
+async function loadTeams() {
+  document.getElementById('teams-club').textContent = coachProfile ? coachProfile.club_texto || '' : '';
+  var res = await sb.from('equipos').select('*').order('creado_en', { ascending: false });
+  if (res.error) { showToast('Error cargando equipos'); return; }
+  teams = res.data || [];
+  renderTeams();
+}
+
+function renderTeams() {
+  var el = document.getElementById('teams-list');
+  if (!teams.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">&#127953;</div><h2>Sin equipos</h2>' +
+      '<p>Crea tu primer equipo para empezar a evaluar jugadoras</p>' +
+      '<button onclick="goTo(\'screen-create-team\')" class="btn-primary" style="margin-top:20px;max-width:240px">CREAR EQUIPO</button></div>';
+    return;
+  }
+  el.innerHTML = teams.map(function(t) {
+    return '<div class="team-card" onclick="openTeam(\'' + t.id + '\')">' +
+      '<div class="team-color" style="background:' + escHtml(t.color || '#E63946') + '"></div>' +
+      '<div class="team-info"><div class="team-name">' + escHtml(t.nombre || 'Sin nombre') + '</div>' +
+      '<div class="team-meta">CREADO ' + formatDate(t.creado_en) + '</div></div>' +
+      '<div class="team-arrow">\u203A</div></div>';
+  }).join('');
+}
+
+function openTeam(id) {
+  currentTeam = teams.find(function(t) { return t.id === id; });
+  goTo('screen-roster');
+}
+
+var selectedColor = TEAM_COLORS[0];
+
+function renderColorPicker() {
+  document.getElementById('ct-nombre').value = '';
+  document.getElementById('ct-error').style.display = 'none';
+  selectedColor = TEAM_COLORS[0];
+  document.getElementById('ct-colors').innerHTML = TEAM_COLORS.map(function(c) {
+    return '<div class="color-dot ' + (c === selectedColor ? 'selected' : '') + '" style="background:' + c + '" onclick="pickColor(\'' + c + '\')"></div>';
+  }).join('');
+}
+
+function pickColor(c) {
+  selectedColor = c;
+  document.querySelectorAll('.color-dot').forEach(function(d) {
+    d.classList.toggle('selected', d.style.backgroundColor === c || d.style.background === c);
+  });
+}
+
+async function createTeam() {
+  var nombre = document.getElementById('ct-nombre').value.trim();
+  if (!nombre) { showToast('Ingresa un nombre'); return; }
+  var res = await sb.from('equipos').insert({
+    nombre: nombre,
+    coach_responsable_id: currentUser.id,
+    color: selectedColor
+  }).select().single();
+  if (res.error) {
+    document.getElementById('ct-error').textContent = res.error.message;
+    document.getElementById('ct-error').style.display = 'block';
+    return;
+  }
+  showToast('Equipo creado');
+  goTo('screen-teams');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ROSTER
+// ═══════════════════════════════════════════════════════════════
+async function loadRoster() {
+  if (!currentTeam) return;
+  document.getElementById('roster-team-name').textContent = currentTeam.nombre || '';
+
+  var res = await sb.from('plantel_coach')
+    .select('*, ficha:fichas_jugadoras(*)')
+    .eq('equipo_id', currentTeam.id)
+    .is('fecha_baja', null);
+  if (res.error) { showToast('Error cargando plantel'); return; }
+  roster = res.data || [];
+  renderRoster();
+}
+
+function renderRoster() {
+  var el = document.getElementById('roster-list');
+  if (!roster.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">&#128100;</div><h2>Sin jugadoras</h2>' +
+      '<p>Agrega jugadoras al plantel para poder evaluarlas</p>' +
+      '<button onclick="goTo(\'screen-add-player\')" class="btn-primary" style="margin-top:20px;max-width:240px">AGREGAR JUGADORA</button></div>';
+    return;
+  }
+  el.innerHTML = roster.map(function(r) {
+    var f = r.ficha;
+    if (!f) return '';
+    var age = calcAge(f.fecha_nacimiento);
+    return '<div class="player-row" onclick="openPlayer(\'' + f.id + '\')">' +
+      '<div class="avatar">' + initials(f.nombre, f.apellido) + '</div>' +
+      '<div class="player-info"><div class="player-name">' + escHtml(f.nombre) + ' ' + escHtml(f.apellido) + '</div>' +
+      '<div class="player-meta">' + (f.posicion || '\u2014') + (age ? ' \u00B7 ' + age + ' a\u00F1os' : '') + '</div></div>' +
+      (f.numero ? '<div class="player-number">' + f.numero + '</div>' : '') +
+      '<div class="team-arrow">\u203A</div></div>';
+  }).join('');
+}
+
+function openPlayer(fichaId) {
+  var entry = roster.find(function(r) { return r.ficha && r.ficha.id === fichaId; });
+  if (entry) { currentPlayer = entry.ficha; goTo('screen-player'); }
+}
+
+async function addPlayer() {
+  var nombre = document.getElementById('ap-nombre').value.trim();
+  var apellido = document.getElementById('ap-apellido').value.trim();
+  var dob = document.getElementById('ap-dob').value;
+  var pos = document.getElementById('ap-pos').value || null;
+  var num = document.getElementById('ap-num').value ? parseInt(document.getElementById('ap-num').value) : null;
+
+  if (!nombre || !apellido) { showToast('Nombre y apellido son obligatorios'); return; }
+  if (!dob) { showToast('Fecha de nacimiento es obligatoria'); return; }
+
+  var fichaRes = await sb.from('fichas_jugadoras').insert({
+    coach_id: currentUser.id, nombre: nombre, apellido: apellido,
+    fecha_nacimiento: dob, posicion: pos, numero: num
+  }).select().single();
+
+  if (fichaRes.error) {
+    document.getElementById('ap-error').textContent = fichaRes.error.message;
+    document.getElementById('ap-error').style.display = 'block';
+    return;
+  }
+
+  var plantelRes = await sb.from('plantel_coach').insert({
+    equipo_id: currentTeam.id, ficha_id: fichaRes.data.id
+  });
+  if (plantelRes.error) { showToast('Error al agregar al plantel: ' + plantelRes.error.message); return; }
+
+  ['ap-nombre','ap-apellido','ap-dob','ap-pos','ap-num'].forEach(function(id) { document.getElementById(id).value = ''; });
+  document.getElementById('ap-error').style.display = 'none';
+  showToast('Jugadora agregada');
+  goTo('screen-roster');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PLAYER PROFILE
+// ═══════════════════════════════════════════════════════════════
+async function loadPlayerProfile() {
+  if (!currentPlayer) return;
+  var p = currentPlayer;
+
+  document.getElementById('player-header').innerHTML =
+    '<div style="display:flex;align-items:center;gap:14px">' +
+    '<div class="avatar avatar-lg">' + initials(p.nombre, p.apellido) + '</div><div>' +
+    '<div style="font-family:\'Barlow Condensed\',sans-serif;font-weight:600;font-size:20px;text-transform:uppercase;letter-spacing:.04em">' +
+    escHtml(p.nombre) + ' ' + escHtml(p.apellido) + '</div>' +
+    '<div class="muted" style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;text-transform:uppercase;letter-spacing:.12em;margin-top:2px">' +
+    (p.posicion || '\u2014') + (p.numero ? ' \u00B7 #' + p.numero : '') +
+    (calcAge(p.fecha_nacimiento) ? ' \u00B7 ' + calcAge(p.fecha_nacimiento) + ' a\u00F1os' : '') +
+    '</div></div></div>';
+
+  var evalRes = await sb.from('evaluaciones').select('*').eq('ficha_id', p.id).order('fecha', { ascending: false });
+  playerEvals = evalRes.data || [];
+
+  var t1 = playerEvals.filter(function(e) { return e.tipo_test === 'T1_OCHOS'; });
+  var last = t1.length ? t1[0].resultado_principal : null;
+  var best = t1.length ? Math.max.apply(null, t1.map(function(e) { return e.resultado_principal; })) : null;
+
+  document.getElementById('player-stats').innerHTML =
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:#1a1a1a;border-radius:10px;overflow:hidden">' +
+    '<div style="background:#111;padding:14px;text-align:center"><div class="num" style="font-size:28px;color:' +
+    (last !== null ? '#FFD600' : '#6B6B6B') + '">' + (last !== null ? last : '\u2014') + '</div>' +
+    '<div class="label muted" style="font-size:9px;margin-top:4px">ULTIMO</div></div>' +
+    '<div style="background:#111;padding:14px;text-align:center"><div class="num" style="font-size:28px;color:' +
+    (best !== null ? '#2A9D8F' : '#6B6B6B') + '">' + (best !== null ? best : '\u2014') + '</div>' +
+    '<div class="label muted" style="font-size:9px;margin-top:4px">MEJOR</div></div>' +
+    '<div style="background:#111;padding:14px;text-align:center"><div class="num" style="font-size:28px">' +
+    playerEvals.length + '</div><div class="label muted" style="font-size:9px;margin-top:4px">TESTS</div></div></div>';
+
+  var chartEl = document.getElementById('player-chart');
+  if (t1.length >= 2) {
+    chartEl.innerHTML = '<div class="spark-container"><div class="label muted" style="font-size:10px;margin-bottom:8px">PROGRESION T1 OCHOS</div>' +
+      '<canvas id="spark-canvas" width="600" height="200"></canvas></div>';
+    drawSparkChart(t1);
+  } else { chartEl.innerHTML = ''; }
+
+  var histEl = document.getElementById('player-history');
+  if (!playerEvals.length) {
+    histEl.innerHTML = '<div class="muted" style="text-align:center;padding:20px;font-size:13px">Sin evaluaciones aun</div>';
+  } else {
+    histEl.innerHTML = playerEvals.map(function(e) {
+      return '<div class="hist-row"><div><div class="hist-test">' + escHtml(e.tipo_test.replace('_', ' ')) + '</div>' +
+        '<div class="hist-date">' + formatDate(e.fecha) + '</div></div>' +
+        '<div class="hist-value">' + e.resultado_principal + '</div></div>';
+    }).join('');
+  }
+}
+
+function drawSparkChart(evals) {
+  var canvas = document.getElementById('spark-canvas');
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  var W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  var data = evals.slice().reverse();
+  if (data.length < 2) return;
+  var values = data.map(function(e) { return e.resultado_principal; });
+  var maxVal = Math.max.apply(null, values), minVal = Math.min.apply(null, values);
+  var range = (maxVal - minVal) || 1;
+  var pX = 20, pY = 20, pW = W - 40, pH = H - 40;
+
+  // Fill
+  ctx.beginPath();
+  data.forEach(function(e, i) {
+    var x = pX + (i / (data.length - 1)) * pW;
+    var y = pY + pH - ((e.resultado_principal - minVal) / range) * pH;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.lineTo(pX + pW, pY + pH);
+  ctx.lineTo(pX, pY + pH);
+  ctx.closePath();
+  var grad = ctx.createLinearGradient(0, pY, 0, pY + pH);
+  grad.addColorStop(0, 'rgba(230,57,70,0.25)');
+  grad.addColorStop(1, 'rgba(230,57,70,0)');
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  data.forEach(function(e, i) {
+    var x = pX + (i / (data.length - 1)) * pW;
+    var y = pY + pH - ((e.resultado_principal - minVal) / range) * pH;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#E63946';
+  ctx.lineWidth = 2.5;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+
+  // Dots
+  data.forEach(function(e, i) {
+    var x = pX + (i / (data.length - 1)) * pW;
+    var y = pY + pH - ((e.resultado_principal - minVal) / range) * pH;
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#E63946';
+    ctx.fill();
+    ctx.strokeStyle = '#0A0A0A';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  });
+}
+
+function startEval() { goTo('screen-tests'); }
+
+function renderTests() {
+  document.getElementById('test-player-name').textContent =
+    currentPlayer ? currentPlayer.nombre + ' ' + currentPlayer.apellido : '';
+  document.getElementById('tests-list').innerHTML = TESTS.map(function(t) {
+    return '<div class="test-card" onclick="selectTest(\'' + t.id + '\')">' +
+      '<div class="test-icon">' + t.icon + '</div><div class="test-info">' +
+      '<div class="test-name">' + t.code + ' \u2014 ' + t.name + ': ' + t.sub + '</div>' +
+      '<div class="test-desc">' + t.kpi + ' \u00B7 ' + t.duration + 's</div></div>' +
+      '<div class="team-arrow">\u203A</div></div>';
+  }).join('');
+}
+
+function selectTest(testId) {
+  selectedTest = TESTS.find(function(t) { return t.id === testId; });
+  startTestChallenge();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SETTINGS
+// ═══════════════════════════════════════════════════════════════
+function renderSettings() {
+  var meta = currentUser ? currentUser.user_metadata || {} : {};
+  var name = meta.full_name || meta.name || (currentUser ? currentUser.email : '');
+  var avatar = meta.avatar_url;
+  document.getElementById('settings-profile').innerHTML =
+    '<div class="profile-header">' +
+    (avatar ? '<img src="' + escHtml(avatar) + '" alt="">' : '<div class="avatar avatar-lg">' + (name[0] || '?').toUpperCase() + '</div>') +
+    '<div><div style="font-family:\'Barlow Condensed\',sans-serif;font-weight:600;font-size:18px;text-transform:uppercase;letter-spacing:.04em">' +
+    escHtml(name) + '</div><div class="muted" style="font-size:13px">' + escHtml(currentUser ? currentUser.email : '') + '</div>' +
+    '<div class="muted" style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;text-transform:uppercase;letter-spacing:.1em;margin-top:4px">' +
+    escHtml(coachProfile ? coachProfile.club_texto || '' : '') + '</div></div></div>';
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SOUND SYSTEM
+// ═══════════════════════════════════════════════════════════════
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function playBeep(freq, duration, type, gain) {
+  freq = freq || 440; duration = duration || 0.12; type = type || 'sine'; gain = gain || 0.4;
+  try {
+    var ctx = getAudioCtx();
+    var osc = ctx.createOscillator();
+    var vol = ctx.createGain();
+    osc.connect(vol); vol.connect(ctx.destination);
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    vol.gain.setValueAtTime(gain, ctx.currentTime);
+    vol.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + duration);
+  } catch(e) {}
+}
+
+function playEightSound() {
+  playBeep(660, 0.08, 'sine', 0.3);
+  setTimeout(function() { playBeep(880, 0.06, 'sine', 0.2); }, 80);
+}
+function playWarningBeep() { playBeep(330, 0.25, 'square', 0.35); }
+function playUrgentBeep() {
+  playBeep(880, 0.1, 'sine', 0.4);
+  setTimeout(function() { playBeep(1100, 0.08, 'sine', 0.3); }, 100);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  MODEL LOADING (COCO-SSD only)
+// ═══════════════════════════════════════════════════════════════
+async function _loadCocoSsd() {
+  if (cocoModel || modelLoading) return cocoModel;
+  modelLoading = true;
+  try {
+    if (typeof tf !== 'undefined') {
+      await tf.setBackend('webgl');
+      await tf.ready();
+      console.log('[COCOSD] Backend:', tf.getBackend());
+    }
+    cocoModel = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
+    console.log('[COCOSD] Modelo cargado');
+    // Warmup
+    var dc = document.createElement('canvas');
+    dc.width = 320; dc.height = 240;
+    var dctx = dc.getContext('2d');
+    dctx.fillStyle = 'black';
+    dctx.fillRect(0, 0, 320, 240);
+    for (var i = 0; i < 3; i++) await cocoModel.detect(dc);
+    console.log('[COCOSD] Warmup completo');
+  } catch(e) {
+    console.error('[COCOSD] Error:', e);
+  }
+  modelLoading = false;
+  return cocoModel;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  TRACKER (smooth ball position)
+// ═══════════════════════════════════════════════════════════════
+function trackerUpdate(detected) {
+  if (detected) {
+    lostFrames = 0;
+    if (!trackedBall) {
+      trackedBall = { x: detected.x, y: detected.y };
+    } else {
+      trackedBall.x = 0.85 * detected.x + 0.15 * trackedBall.x;
+      trackedBall.y = 0.85 * detected.y + 0.15 * trackedBall.y;
+    }
+    return { x: trackedBall.x, y: trackedBall.y };
+  }
+  lostFrames++;
+  return null;
+}
+function trackerReset() { trackedBall = null; lostFrames = 0; }
+
+// ═══════════════════════════════════════════════════════════════
+//  EIGHT DETECTION STATE MACHINE
+// ═══════════════════════════════════════════════════════════════
+function resetEightState() {
+  pathPoints = []; eightState = 0; firstConeVisited = null;
+  centerCrossings = 0; lastCenterSide = null; stateStartTime = 0;
+  lastBallMoveTime = 0; verticalRangeInState = { minY: Infinity, maxY: -Infinity };
+}
+
+function detectEight(newPos) {
+  if (!newPos || !coneA || !coneB || !conesMarked) return;
+
+  pathPoints.push({ x: newPos.x, y: newPos.y, t: Date.now() });
+  if (pathPoints.length > PATH_MAX) pathPoints.shift();
+
+  var leftCone = coneA.x <= coneB.x ? coneA : coneB;
+  var rightCone = coneA.x <= coneB.x ? coneB : coneA;
+  var midX = (leftCone.x + rightCone.x) / 2;
+  var centerBand = Math.abs(rightCone.x - leftCone.x) * 0.20;
+
+  var currentSide = newPos.x < midX - centerBand ? 'left'
+                  : newPos.x > midX + centerBand ? 'right' : 'center';
+
+  var justCrossed = false;
+  if (lastCenterSide && currentSide !== 'center' && lastCenterSide !== currentSide && lastCenterSide !== 'center') {
+    justCrossed = true; centerCrossings++;
+  }
+  if (currentSide !== 'center') lastCenterSide = currentSide;
+
+  verticalRangeInState.minY = Math.min(verticalRangeInState.minY, newPos.y);
+  verticalRangeInState.maxY = Math.max(verticalRangeInState.maxY, newPos.y);
+
+  var outsideLeft = newPos.x < leftCone.x;
+  var outsideRight = newPos.x > rightCone.x;
+  var separacion = Math.abs(rightCone.x - leftCone.x);
+  var minMovVertical = separacion * 0.20;
+  var aIsLeft = coneA.x <= coneB.x;
+  var outsideA = aIsLeft ? outsideLeft : outsideRight;
+  var outsideB = aIsLeft ? outsideRight : outsideLeft;
+  var now = Date.now();
+
+  if (pathPoints.length >= 2) {
+    var prev = pathPoints[pathPoints.length - 2];
+    var dx = newPos.x - prev.x, dy = newPos.y - prev.y;
+    if (Math.sqrt(dx*dx + dy*dy) > 8) lastBallMoveTime = now;
+  } else { lastBallMoveTime = now; }
+
+  if (eightState > 0 && lastBallMoveTime > 0 && now - lastBallMoveTime > STATE_TIMEOUT) {
+    eightState = 0; firstConeVisited = null; centerCrossings = 0;
+    verticalRangeInState = { minY: Infinity, maxY: -Infinity };
+  }
+
+  switch (eightState) {
+    case 0:
+      if (outsideA) { eightState = 1; firstConeVisited = 'A'; stateStartTime = now; centerCrossings = 0; }
+      else if (outsideB) { eightState = 1; firstConeVisited = 'B'; stateStartTime = now; centerCrossings = 0; }
+      break;
+    case 1:
+      if (justCrossed) eightState = 2;
+      break;
+    case 2:
+      if (firstConeVisited === 'A' && outsideB) eightState = 3;
+      else if (firstConeVisited === 'B' && outsideA) eightState = 3;
+      else if ((firstConeVisited === 'A' && outsideA) || (firstConeVisited === 'B' && outsideB)) {
+        eightState = 1; centerCrossings = 1;
+      }
+      break;
+    case 3:
+      if (justCrossed) {
+        var rangoV = verticalRangeInState.maxY - verticalRangeInState.minY;
+        if (rangoV >= minMovVertical && now - lastEightTime > eightCooldown) {
+          lastEightTime = now;
+          registerEight();
+        }
+        eightState = 0; firstConeVisited = null; centerCrossings = 0;
+        verticalRangeInState = { minY: Infinity, maxY: -Infinity };
+      }
+      break;
+  }
+}
+
+function registerEight() {
+  if (!challengeActive) return;
+  eightCount++;
+  playEightSound();
+  document.getElementById('hud-counter').textContent = eightCount;
+  var statusEl = document.getElementById('status-bar');
+  statusEl.textContent = '\u2705 \u00A1OCHO #' + eightCount + ' detectado!';
+  statusEl.className = 'status-bar detected';
+  setTimeout(function() {
+    if (challengeActive) {
+      statusEl.textContent = '\uD83C\uDFD1 Segui haciendo ochos...';
+      statusEl.className = 'status-bar detected';
+    }
+  }, 800);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CONE DRAWING
+// ═══════════════════════════════════════════════════════════════
+function drawCones(W, H) {
+  if (!overlayCtx || !W || !H) return;
+  var cones = [];
+  if (coneA) cones.push({ x: coneA.x, y: coneA.y, label: 'A' });
+  if (coneB) cones.push({ x: coneB.x, y: coneB.y, label: 'B' });
+
+  cones.forEach(function(c) {
+    overlayCtx.save();
+    overlayCtx.beginPath();
+    overlayCtx.arc(c.x, c.y, 11, 0, Math.PI * 2);
+    overlayCtx.strokeStyle = '#FF6B00';
+    overlayCtx.lineWidth = 2.5;
+    overlayCtx.stroke();
+    overlayCtx.beginPath();
+    overlayCtx.arc(c.x, c.y, 3, 0, Math.PI * 2);
+    overlayCtx.fillStyle = '#FF6B00';
+    overlayCtx.fill();
+    overlayCtx.font = 'bold 12px sans-serif';
+    overlayCtx.fillStyle = '#FF9A00';
+    overlayCtx.textAlign = 'center';
+    overlayCtx.fillText(c.label, c.x, c.y - 16);
+    overlayCtx.restore();
+  });
+
+  if (coneA && coneB) {
+    var rX = Math.abs(coneB.x - coneA.x) / 2.2;
+    var rY = H * 0.15;
+    overlayCtx.save();
+    overlayCtx.globalAlpha = 0.18;
+    overlayCtx.strokeStyle = '#39FF14';
+    overlayCtx.lineWidth = 2;
+    overlayCtx.setLineDash([8, 6]);
+    overlayCtx.beginPath();
+    overlayCtx.ellipse(coneA.x, coneA.y - 20, rX, rY, 0, 0, Math.PI * 2);
+    overlayCtx.stroke();
+    overlayCtx.beginPath();
+    overlayCtx.ellipse(coneB.x, coneB.y - 20, rX, rY, 0, 0, Math.PI * 2);
+    overlayCtx.stroke();
+    overlayCtx.setLineDash([]);
+    overlayCtx.restore();
+  }
+
+  if (challengeActive && coneA && coneB) {
+    var showA = (firstConeVisited === 'A' && eightState >= 1) || (firstConeVisited === 'B' && eightState >= 3);
+    var showB = (firstConeVisited === 'B' && eightState >= 1) || (firstConeVisited === 'A' && eightState >= 3);
+    [[showA, coneA, -30], [showB, coneB, 30]].forEach(function(arr) {
+      if (!arr[0]) return;
+      overlayCtx.save();
+      overlayCtx.fillStyle = '#39FF14';
+      overlayCtx.beginPath();
+      overlayCtx.arc(arr[1].x + arr[2], arr[1].y - 25, 9, 0, Math.PI * 2);
+      overlayCtx.fill();
+      overlayCtx.strokeStyle = '#000';
+      overlayCtx.lineWidth = 2;
+      overlayCtx.stroke();
+      overlayCtx.restore();
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CONE MARKING + BALL CALIBRATION
+// ═══════════════════════════════════════════════════════════════
+function screenToVideoCoords(clientX, clientY) {
+  var rect = overlayCanvas.getBoundingClientRect();
+  var dispW = rect.width, dispH = rect.height;
+  var vidW = (videoEl && videoEl.videoWidth) || overlayCanvas.width;
+  var vidH = (videoEl && videoEl.videoHeight) || overlayCanvas.height;
+  var scale = Math.max(dispW / vidW, dispH / vidH);
+  var offsetX = (vidW * scale - dispW) / 2;
+  var offsetY = (vidH * scale - dispH) / 2;
+  return { x: (clientX - rect.left + offsetX) / scale, y: (clientY - rect.top + offsetY) / scale };
+}
+
+function startConeMarking() {
+  coneA = null; coneB = null; conesMarked = false; coneMarkingStep = 0;
+  document.getElementById('btn-start-challenge').style.display = 'none';
+  document.getElementById('btn-remark-cones').style.display = 'none';
+  document.getElementById('status-bar').textContent = '\uD83D\uDC46 Toca el primer cono (A)';
+  document.getElementById('status-bar').className = 'status-bar';
+  var canvas = document.getElementById('canvas-overlay');
+  canvas.style.pointerEvents = 'all';
+  canvas.ontouchstart = handleConeTap;
+  canvas.onclick = handleConeTap;
+}
+
+function handleConeTap(e) {
+  e.preventDefault();
+  if (conesMarked || !videoEl || !overlayCanvas) return;
+  var touch = e.touches ? e.touches[0] : e;
+  var pos = screenToVideoCoords(touch.clientX, touch.clientY);
+  if (coneMarkingStep === 0) {
+    coneA = pos; coneMarkingStep = 1;
+    document.getElementById('status-bar').textContent = '\uD83D\uDC46 Ahora toca el segundo cono (B)';
+    playBeep(660, 0.1, 'sine', 0.3);
+  } else if (coneMarkingStep === 1) {
+    coneB = pos; coneMarkingStep = 2; conesMarked = true;
+    document.getElementById('btn-remark-cones').style.display = 'block';
+    playBeep(880, 0.12, 'sine', 0.3);
+    document.getElementById('canvas-overlay').style.pointerEvents = 'none';
+    iniciarCalibracionBocha();
+  }
+}
+
+function iniciarCalibracionBocha() {
+  window._calibBocha = { activa: true, hecha: false, muestras: [], inicio: Date.now() };
+  document.getElementById('btn-skip-calib').style.display = 'block';
+  document.getElementById('btn-start-challenge').style.display = 'none';
+  document.getElementById('status-bar').textContent = '\uD83C\uDFAF Pone la bocha quieta dentro del circulo amarillo';
+  document.getElementById('status-bar').className = 'status-bar';
+}
+
+function finCalibracionBocha(ok) {
+  window._calibBocha.activa = false;
+  window._calibBocha.hecha = ok;
+  document.getElementById('btn-skip-calib').style.display = 'none';
+  document.getElementById('btn-start-challenge').style.display = 'block';
+  var statusEl = document.getElementById('status-bar');
+  statusEl.textContent = ok ? '\u2705 Bocha calibrada \u2014 presiona COMENZAR' : '\u2705 Todo listo \u2014 presiona COMENZAR';
+  statusEl.className = 'status-bar detected';
+  if (ok) playBeep(880, 0.12, 'sine', 0.3);
+}
+
+function saltarCalibracion() { finCalibracionBocha(false); }
+
+function restartConeMarking() {
+  document.getElementById('canvas-overlay').style.pointerEvents = 'all';
+  startConeMarking();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CAMERA + ORIENTATION
+// ═══════════════════════════════════════════════════════════════
+function stopCamera() {
+  if (stream) { stream.getTracks().forEach(function(t) { t.stop(); }); stream = null; }
+  if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  challengeActive = false;
+}
+
+function checkOrientation() {
+  var overlay = document.getElementById('rotate-overlay');
+  if (!overlay) return;
+  var isPortrait = window.innerHeight > window.innerWidth;
+  var cs = document.getElementById('screen-challenge');
+  overlay.style.display = (isPortrait && cs && cs.classList.contains('active')) ? 'flex' : 'none';
+}
+
+function updateCanvasDimensions() {
+  if (!overlayCanvas || !videoEl || videoEl.videoWidth === 0) return;
+  overlayCanvas.width = videoEl.videoWidth;
+  overlayCanvas.height = videoEl.videoHeight;
+}
+
+window.addEventListener('resize', function() { checkOrientation(); updateCanvasDimensions(); });
+window.addEventListener('orientationchange', function() { checkOrientation(); setTimeout(updateCanvasDimensions, 300); });
+
+// ═══════════════════════════════════════════════════════════════
+//  DETECTION LOOP
+// ═══════════════════════════════════════════════════════════════
+function startDetectionLoop() {
+  if (animFrame) cancelAnimationFrame(animFrame);
+
+  var lastBallPos = null;
+  var lastBallSize = null;
+  var inferring = false;
+  var lastInferenceTime = 0;
+  var ballHistory = [];
+  var DETECTION_INTERVAL_MS = 83;
+
+  var modelCanvas = document.createElement('canvas');
+  var modelCtx = modelCanvas.getContext('2d');
+  var mW = window.IS_LOW_END ? 224 : 320;
+  var mH = window.IS_LOW_END ? 168 : 240;
+  modelCanvas.width = mW; modelCanvas.height = mH;
+
+  // Color tracker
+  var USE_COLOR_TRACKER = sessionStorage.getItem('USE_COLOR_TRACKER') !== 'false';
+  var trackCanvas = document.createElement('canvas');
+  trackCanvas.width = 64; trackCanvas.height = 64;
+  var trackCtx = trackCanvas.getContext('2d', { willReadFrequently: true });
+  var _ballColorRef = null;
+
+  function _sampleBallColor(det) {
+    try {
+      var w2 = Math.max(6, det.w * 0.5), h2 = Math.max(6, det.h * 0.5);
+      trackCtx.drawImage(videoEl, det.x - w2/2, det.y - h2/2, w2, h2, 0, 0, 8, 8);
+      var d = trackCtx.getImageData(0, 0, 8, 8).data;
+      var r = 0, g = 0, b = 0;
+      for (var i = 0; i < 64; i++) { r += d[i*4]; g += d[i*4+1]; b += d[i*4+2]; }
+      var sum = r + g + b;
+      if (sum < 600) return;
+      var rn = r / sum, gn = g / sum;
+      _ballColorRef = _ballColorRef
+        ? { rn: _ballColorRef.rn * 0.7 + rn * 0.3, gn: _ballColorRef.gn * 0.7 + gn * 0.3 }
+        : { rn: rn, gn: gn };
+    } catch(e) {}
+  }
+
+  function _colorTrackStep(vW, vH) {
+    var size = Math.max(140, (lastBallSize || 30) * 5);
+    var sx = Math.min(Math.max(lastBallPos.x - size/2, 0), Math.max(0, vW - size));
+    var sy = Math.min(Math.max(lastBallPos.y - size/2, 0), Math.max(0, vH - size));
+    var TS = 64;
+    try {
+      trackCtx.drawImage(videoEl, sx, sy, size, size, 0, 0, TS, TS);
+      var d = trackCtx.getImageData(0, 0, TS, TS).data;
+      var sumX = 0, sumY = 0, count = 0;
+      for (var i = 0; i < TS * TS; i++) {
+        var r = d[i*4], g = d[i*4+1], b = d[i*4+2], s = r + g + b;
+        if (s < 90) continue;
+        var dr = r/s - _ballColorRef.rn, dg = g/s - _ballColorRef.gn;
+        if (dr*dr + dg*dg < 0.0022) { sumX += i % TS; sumY += (i/TS)|0; count++; }
+      }
+      if (count < 6 || count > TS*TS*0.35) return null;
+      var cx = sx + (sumX/count + 0.5) * (size/TS);
+      var cy = sy + (sumY/count + 0.5) * (size/TS);
+      var ddx = cx - lastBallPos.x, ddy = cy - lastBallPos.y, maxJ = size * 0.45;
+      if (ddx*ddx + ddy*ddy > maxJ*maxJ) return null;
+      return { x: cx, y: cy };
+    } catch(e) { return null; }
+  }
+
+  function _calibStep(vW, vH) {
+    var c = window._calibBocha;
+    var r = Math.max(30, Math.min(vW, vH) * 0.10);
+    try {
+      trackCtx.drawImage(videoEl, vW/2 - r, vH/2 - r, r*2, r*2, 0, 0, 16, 16);
+      var d = trackCtx.getImageData(4, 4, 8, 8).data;
+      var R = 0, G = 0, B = 0;
+      for (var i = 0; i < 64; i++) { R += d[i*4]; G += d[i*4+1]; B += d[i*4+2]; }
+      var sum = R + G + B;
+      if (sum >= 600) {
+        var rn = R/sum, gn = G/sum;
+        if (!(gn - rn > 0.06)) c.muestras.push({ rn: rn, gn: gn });
+      }
+    } catch(e) {}
+    if (c.muestras.length > 40) c.muestras.shift();
+
+    var t = Date.now() - c.inicio;
+    if (c.muestras.length >= 18 && t > 1200) {
+      var ms = c.muestras.slice(-18);
+      var mrn = ms.reduce(function(a, m) { return a + m.rn; }, 0) / ms.length;
+      var mgn = ms.reduce(function(a, m) { return a + m.gn; }, 0) / ms.length;
+      var maxDev = Math.max.apply(null, ms.map(function(m) { return Math.hypot(m.rn - mrn, m.gn - mgn); }));
+      if (maxDev < 0.035) {
+        _ballColorRef = { rn: mrn, gn: mgn };
+        lastBallPos = { x: vW/2, y: vH/2 };
+        lastBallSize = Math.round(r * 0.9);
+        console.log('[CALIB] Bocha calibrada');
+        finCalibracionBocha(true);
+        return;
+      }
+    }
+    if (t > 6000 && t % 2000 < 40) {
+      document.getElementById('status-bar').textContent = '\uD83C\uDFAF Acerca la bocha al centro del circulo';
+    }
+  }
+
+  async function _runCocoSsdInference() {
+    modelCtx.drawImage(videoEl, 0, 0, mW, mH);
+    var predictions = await cocoModel.detect(modelCanvas, 10, 0.15);
+    var scaleX = videoEl.videoWidth / mW;
+    var scaleY = videoEl.videoHeight / mH;
+    predictions.forEach(function(p) { p.bbox[0] *= scaleX; p.bbox[1] *= scaleY; p.bbox[2] *= scaleX; p.bbox[3] *= scaleY; });
+    return predictions.filter(function(p) {
+      if (p.class !== 'sports ball') return false;
+      var w = p.bbox[2], h = p.bbox[3], aspect = w/h;
+      if (aspect < 0.6 || aspect > 1.6) return false;
+      if (w < 8 || h < 8) return false;
+      if (w > videoEl.videoWidth * 0.3 || h > videoEl.videoHeight * 0.3) return false;
+      return true;
+    });
+  }
+
+  async function runInference() {
+    if (inferring || !cocoModel || !videoEl || videoEl.readyState < 2) return;
+    inferring = true;
+    try { lastDetections = await _runCocoSsdInference(); }
+    catch(e) { console.error('[COCOSD] Error:', e); }
+    inferring = false;
+  }
+
+  function loop() {
+    animFrame = requestAnimationFrame(loop);
+    if (document.hidden) return;
+    if (window.innerHeight > window.innerWidth) return;
+    if (!videoEl || videoEl.readyState < 2 || !overlayCanvas || overlayCanvas.width === 0) return;
+
+    var vW = videoEl.videoWidth, vH = videoEl.videoHeight;
+
+    // Ball calibration
+    if (window._calibBocha && window._calibBocha.activa) {
+      _calibStep(vW, vH);
+      overlayCtx.clearRect(0, 0, vW, vH);
+      drawCones(vW, vH);
+      var cr = Math.max(30, Math.min(vW, vH) * 0.10);
+      overlayCtx.beginPath();
+      overlayCtx.arc(vW/2, vH/2, cr, 0, Math.PI*2);
+      overlayCtx.strokeStyle = '#FFD600';
+      overlayCtx.lineWidth = 3;
+      overlayCtx.setLineDash([8, 6]);
+      overlayCtx.stroke();
+      overlayCtx.setLineDash([]);
+      return;
+    }
+
+    // Throttled inference
+    var now = Date.now();
+    if (now - lastInferenceTime >= DETECTION_INTERVAL_MS) {
+      lastInferenceTime = now;
+      runInference();
+    }
+
+    // Pick best ball
+    var detected = null;
+    if (lastDetections.length > 0) {
+      var candidates = lastDetections.map(function(det) {
+        var cx = det.bbox[0] + det.bbox[2]/2, cy = det.bbox[1] + det.bbox[3]/2;
+        var score = det.score;
+        if (lastBallPos) {
+          var dist = Math.sqrt(Math.pow(cx - lastBallPos.x, 2) + Math.pow(cy - lastBallPos.y, 2));
+          var frameMax = Math.max(vW, vH);
+          score += Math.max(0, 1 - dist/(frameMax*0.5)) * 0.5;
+          if (dist > frameMax * 0.4) score -= 0.6;
+          if (lastBallSize) {
+            var ratio = Math.max(det.bbox[2], det.bbox[3]) / lastBallSize;
+            if (ratio > 2.5 || ratio < 0.4) score -= 0.3;
+          }
+        }
+        return { det: det, score: score };
+      });
+      candidates.sort(function(a, b) { return b.score - a.score; });
+      var best = candidates[0].det;
+      detected = {
+        x: best.bbox[0] + best.bbox[2]/2, y: best.bbox[1] + best.bbox[3]/2,
+        w: best.bbox[2], h: best.bbox[3], score: best.score, fromModel: true
+      };
+      lastDetections = [];
+      _sampleBallColor(detected);
+    }
+
+    // Color tracker between inferences
+    if (!detected && USE_COLOR_TRACKER && _ballColorRef && lastBallPos) {
+      var ct = _colorTrackStep(vW, vH);
+      if (ct) detected = { x: ct.x, y: ct.y, w: lastBallSize || 26, h: lastBallSize || 26, score: 0.45, tracked: true };
+    }
+
+    // Trajectory prediction
+    if (detected) {
+      ballHistory.push({ x: detected.x, y: detected.y, t: Date.now() });
+      if (ballHistory.length > 5) ballHistory.shift();
+    } else if (ballHistory.length >= 2 && challengeActive) {
+      var now2 = Date.now(), n = ballHistory.length, latest = ballHistory[n-1];
+      var elapsed = now2 - latest.t;
+      if (elapsed < 450) {
+        var px, py;
+        if (n >= 3) {
+          var p0 = ballHistory[n-3], p1 = ballHistory[n-2], p2 = ballHistory[n-1];
+          var dt01 = Math.max(1, p1.t - p0.t), dt12 = Math.max(1, p2.t - p1.t);
+          var vx1 = (p1.x-p0.x)/dt01, vy1 = (p1.y-p0.y)/dt01;
+          var vx2 = (p2.x-p1.x)/dt12, vy2 = (p2.y-p1.y)/dt12;
+          var totalDt = Math.max(1, p2.t - p0.t);
+          var ax = (vx2-vx1)/totalDt, ay = (vy2-vy1)/totalDt;
+          px = p2.x + vx2*elapsed + 0.5*ax*elapsed*elapsed;
+          py = p2.y + vy2*elapsed + 0.5*ay*elapsed*elapsed;
+        } else {
+          var a2 = ballHistory[n-2], b2 = ballHistory[n-1];
+          var dt = Math.max(1, b2.t - a2.t);
+          px = b2.x + ((b2.x - a2.x)/dt)*elapsed;
+          py = b2.y + ((b2.y - a2.y)/dt)*elapsed;
+        }
+        detected = { x: px, y: py, w: lastBallSize||30, h: lastBallSize||30, score: 0.5, predicted: true };
+      }
+    }
+
+    var smoothBall = trackerUpdate(detected);
+    if (detected && !detected.predicted) {
+      lastDetectedTime = Date.now();
+      lastBallPos = { x: detected.x, y: detected.y };
+      lastBallSize = Math.max(detected.w, detected.h);
+    }
+
+    // Draw overlay
+    overlayCtx.clearRect(0, 0, vW, vH);
+    drawCones(vW, vH);
+
+    if (smoothBall) {
+      positions.push({ x: smoothBall.x, y: smoothBall.y });
+      if (positions.length > MAX_TRAIL) positions.shift();
+
+      // Trail
+      if (positions.length >= 2) {
+        var pts = [positions[0]];
+        for (var pi = 1; pi < positions.length; pi++) {
+          var prv = pts[pts.length-1];
+          var ddx2 = positions[pi].x - prv.x, ddy2 = positions[pi].y - prv.y;
+          if (Math.sqrt(ddx2*ddx2+ddy2*ddy2) >= 3) pts.push(positions[pi]);
+        }
+        for (var ti = 1; ti < pts.length; ti++) {
+          var alpha = ti / pts.length;
+          overlayCtx.beginPath();
+          if (ti === 1) { overlayCtx.moveTo(pts[0].x, pts[0].y); }
+          else { overlayCtx.moveTo((pts[ti-2].x+pts[ti-1].x)/2, (pts[ti-2].y+pts[ti-1].y)/2); }
+          overlayCtx.quadraticCurveTo(pts[ti-1].x, pts[ti-1].y, (pts[ti-1].x+pts[ti].x)/2, (pts[ti-1].y+pts[ti].y)/2);
+          overlayCtx.strokeStyle = 'rgba(255,214,0,' + (alpha*0.9) + ')';
+          overlayCtx.lineWidth = 2 + alpha*4;
+          overlayCtx.lineCap = 'round';
+          overlayCtx.lineJoin = 'round';
+          overlayCtx.stroke();
+        }
+      }
+
+      var radius = detected ? Math.max(20, Math.max(detected.w, detected.h)/2 + 8) : 24;
+      overlayCtx.beginPath();
+      overlayCtx.arc(smoothBall.x, smoothBall.y, radius, 0, Math.PI*2);
+      overlayCtx.strokeStyle = '#FFD600';
+      overlayCtx.lineWidth = 4;
+      overlayCtx.stroke();
+      overlayCtx.beginPath();
+      overlayCtx.arc(smoothBall.x, smoothBall.y, 8, 0, Math.PI*2);
+      overlayCtx.fillStyle = 'rgba(255,214,0,0.55)';
+      overlayCtx.fill();
+
+      if (!challengeActive && conesMarked && !window._calibBocha.activa) {
+        document.getElementById('status-bar').textContent = '\u2705 Todo listo \u2014 presiona COMENZAR';
+        document.getElementById('status-bar').className = 'status-bar detected';
+      } else if (challengeActive) {
+        detectEight({ x: smoothBall.x, y: smoothBall.y });
+      }
+    } else {
+      positions = [];
+      if (!challengeActive && conesMarked && !window._calibBocha.activa && Date.now() - lastDetectedTime > 2000) {
+        document.getElementById('status-bar').textContent = '\uD83D\uDD0D Mostra la bocha a la camara...';
+        document.getElementById('status-bar').className = 'status-bar';
+      }
+    }
+  }
+
+  loop();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CHALLENGE FLOW
+// ═══════════════════════════════════════════════════════════════
+async function startTestChallenge() {
+  if (!selectedTest) return;
+
+  goTo('screen-challenge');
+  checkOrientation();
+
+  // Reset
+  eightCount = 0;
+  timeLeft = selectedTest.duration;
+  challengeActive = false;
+  positions = [];
+  coneA = null; coneB = null; conesMarked = false; coneMarkingStep = 0;
+  resetEightState();
+  trackerReset();
+  lastDetections = [];
+  window._calibBocha = { activa: false, hecha: false, muestras: [], inicio: 0 };
+
+  document.getElementById('hud-counter').textContent = '0';
+  document.getElementById('hud-timer').textContent = timeLeft;
+  document.getElementById('hud-timer').className = 'hud-timer';
+  document.getElementById('status-bar').textContent = '\uD83E\uDDE0 Cargando camara e IA...';
+  document.getElementById('status-bar').className = 'status-bar';
+  document.getElementById('btn-start-challenge').style.display = 'none';
+  document.getElementById('btn-remark-cones').style.display = 'none';
+  document.getElementById('btn-skip-calib').style.display = 'none';
+  document.getElementById('countdown-overlay').style.display = 'none';
+
+  if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+  if (stream) { stream.getTracks().forEach(function(t) { t.stop(); }); stream = null; }
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+
+  var modelPromise = _loadCocoSsd();
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: window.IS_LOW_END ? 640 : 1280 },
+        height: { ideal: window.IS_LOW_END ? 480 : 720 }
+      },
+      audio: false
+    });
+    videoEl = document.getElementById('video');
+    videoEl.srcObject = stream;
+    videoEl.onloadedmetadata = function() { videoEl.play().catch(function() {}); };
+
+    var waitForVideo = setInterval(async function() {
+      if (videoEl.readyState >= 2 && videoEl.videoWidth > 0) {
+        clearInterval(waitForVideo);
+        overlayCanvas = document.getElementById('canvas-overlay');
+        overlayCtx = overlayCanvas.getContext('2d');
+        overlayCanvas.width = videoEl.videoWidth;
+        overlayCanvas.height = videoEl.videoHeight;
+        updateCanvasDimensions();
+        await modelPromise;
+        startConeMarking();
+        startDetectionLoop();
+      }
+    }, 200);
+  } catch(e) {
+    document.getElementById('status-bar').textContent = '\u274C Sin acceso a camara \u2014 verifica los permisos';
+    console.error('Camera error:', e);
+  }
+}
+
+function startCountdown() {
+  var overlay = document.getElementById('countdown-overlay');
+  var numEl = document.getElementById('countdown-num');
+  overlay.style.display = 'flex';
+  document.getElementById('btn-start-challenge').style.display = 'none';
+  document.getElementById('btn-remark-cones').style.display = 'none';
+
+  var count = 3;
+  numEl.textContent = count;
+  playBeep(440, 0.15);
+
+  var ci = setInterval(function() {
+    count--;
+    if (count > 0) {
+      numEl.textContent = count;
+      playBeep(440, 0.15);
+    } else {
+      overlay.style.display = 'none';
+      clearInterval(ci);
+      challengeActive = true;
+      startChallengeTimer();
+      playBeep(880, 0.2, 'sine', 0.5);
+      document.getElementById('status-bar').textContent = '\uD83C\uDFD1 \u00A1Dale, hace ochos!';
+      document.getElementById('status-bar').className = 'status-bar detected';
+    }
+  }, 1000);
+}
+
+function startChallengeTimer() {
+  timeLeft = selectedTest.duration;
+  document.getElementById('hud-timer').textContent = timeLeft;
+
+  timerInterval = setInterval(function() {
+    timeLeft--;
+    document.getElementById('hud-timer').textContent = timeLeft;
+    if (timeLeft <= 10 && timeLeft > 5) {
+      document.getElementById('hud-timer').className = 'hud-timer warning';
+      playWarningBeep();
+    } else if (timeLeft <= 5 && timeLeft > 0) {
+      document.getElementById('hud-timer').className = 'hud-timer urgent';
+      playUrgentBeep();
+    }
+    if (timeLeft <= 0) endChallenge();
+  }, 1000);
+}
+
+function endChallenge() {
+  challengeActive = false;
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  resultadoIA = eightCount;
+  resultadoPrincipal = eightCount;
+  corregido = false;
+  playBeep(440, 0.3, 'sine', 0.5);
+  setTimeout(function() { playBeep(330, 0.4, 'sine', 0.4); }, 300);
+  stopCamera();
+  goTo('screen-result');
+  renderResult();
+}
+
+function abortChallenge() {
+  challengeActive = false;
+  stopCamera();
+  goTo('screen-tests');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RESULT & SAVE
+// ═══════════════════════════════════════════════════════════════
+function renderResult() {
+  document.getElementById('result-test-name').textContent =
+    selectedTest ? selectedTest.code + ' \u2014 ' + selectedTest.name + ': ' + selectedTest.sub : '';
+  document.getElementById('result-player').textContent =
+    currentPlayer ? currentPlayer.nombre + ' ' + currentPlayer.apellido : '';
+  document.getElementById('result-duration').textContent = selectedTest ? selectedTest.duration : 90;
+  document.getElementById('result-count').textContent = resultadoIA;
+  document.getElementById('result-final').textContent = resultadoPrincipal;
+  document.getElementById('result-corrected').style.display = 'none';
+}
+
+function correctResult(delta) {
+  resultadoPrincipal = Math.max(0, resultadoPrincipal + delta);
+  document.getElementById('result-final').textContent = resultadoPrincipal;
+  corregido = resultadoPrincipal !== resultadoIA;
+  document.getElementById('result-corrected').style.display = corregido ? 'block' : 'none';
+}
+
+async function saveEvaluacion() {
+  if (!currentPlayer || !selectedTest) return;
+  var res = await sb.from('evaluaciones').insert({
+    ficha_id: currentPlayer.id,
+    coach_id: currentUser.id,
+    equipo_id: currentTeam ? currentTeam.id : null,
+    tipo_test: selectedTest.id,
+    duracion_segundos: selectedTest.duration,
+    resultado_principal: resultadoPrincipal,
+    resultado_ia: resultadoIA,
+    corregido: corregido,
+    estado: 'valido'
+  });
+  if (res.error) { showToast('Error al guardar: ' + res.error.message); return; }
+  showToast('Resultado guardado');
+  goTo('screen-player');
+}
+
+function discardResult() { goTo('screen-tests'); }
+
+// ═══════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', initApp);
+</script>
+</body>
+</html>
