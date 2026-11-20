@@ -68,6 +68,11 @@ input,select{font-family:inherit}
 .color-dot{width:36px;height:36px;border-radius:50%;border:2px solid transparent;cursor:pointer}
 .color-dot.selected{border-color:#F5F5F5;box-shadow:0 0 0 2px #E63946}
 
+/* ═══ CHIP SELECTOR ═══ */
+.chip-group{display:flex;gap:8px;flex-wrap:wrap}
+.chip{padding:8px 16px;border-radius:20px;border:1px solid #333;background:transparent;color:#aaa;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:500;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;transition:all .15s}
+.chip.selected{background:#E63946;border-color:#E63946;color:#fff}
+
 /* ═══ AVATAR ═══ */
 .avatar{width:40px;height:40px;border-radius:50%;background:#1f1f1f;color:#E63946;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .avatar-lg{width:64px;height:64px;font-size:24px}
@@ -220,10 +225,18 @@ input,select{font-family:inherit}
       <input id="ct-nombre" type="text" placeholder="Ej: Sub-14 Femenino">
     </div>
     <div class="input-group">
+      <label>CATEGORÍA</label>
+      <div id="ct-categoria" class="chip-group"></div>
+    </div>
+    <div class="input-group">
+      <label>GÉNERO</label>
+      <div id="ct-genero" class="chip-group"></div>
+    </div>
+    <div class="input-group">
       <label>COLOR</label>
       <div id="ct-colors" class="color-options"></div>
     </div>
-    <button onclick="createTeam()" class="btn-primary" style="margin-top:24px">CREAR EQUIPO</button>
+    <button id="ct-submit" onclick="createTeam()" class="btn-primary" style="margin-top:24px">CREAR EQUIPO</button>
     <p id="ct-error" style="color:#E63946;font-size:13px;margin-top:8px;display:none"></p>
   </div>
 </div>
@@ -319,7 +332,7 @@ input,select{font-family:inherit}
       <div class="label" style="font-size:10px;color:#FFD600;opacity:.7">OCHOS</div>
     </div>
     <div style="text-align:right">
-      <div id="hud-timer" class="hud-timer">90</div>
+      <div id="hud-timer" class="hud-timer">60</div>
       <div class="label" style="font-size:10px;opacity:.7">SEG</div>
     </div>
   </div>
@@ -340,7 +353,7 @@ input,select{font-family:inherit}
     <div id="result-test-name" class="label" style="font-size:14px;margin-top:4px"></div>
     <div id="result-player" class="muted" style="font-size:13px;margin-top:8px"></div>
     <div id="result-count" class="result-big" style="margin-top:24px">0</div>
-    <div class="label muted" style="font-size:11px;margin-top:4px">OCHOS EN <span id="result-duration">90</span>s</div>
+    <div class="label muted" style="font-size:11px;margin-top:4px">OCHOS EN <span id="result-duration">60</span>s</div>
     <div class="correction-btns">
       <button class="correction-btn" onclick="correctResult(-1)">&minus;</button>
       <div id="result-final" class="num" style="font-size:48px;min-width:60px;text-align:center">0</div>
@@ -395,9 +408,21 @@ const SUPABASE_URL  = 'https://unecxdrjiwuqzlqqfjrt.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVuZWN4ZHJqaXd1cXpscXFmanJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxNjEyNjEsImV4cCI6MjA5NDczNzI2MX0.PABTKHGCNBiYA4VzPKgaV9cx2D8frM6eA7sU4D9urIs';
 
 const TESTS = [
-  { id: 'T1_OCHOS', code: 'T1', name: 'DOMINIO', sub: 'Ochos', duration: 90, kpi: 'Ochos / 90s', icon: '\u221E' }
+  { id: 'T1_OCHOS', code: 'T1', name: 'DOMINIO', sub: 'Ochos', duration: 60, kpi: 'Ochos / 60s', icon: '\u221E' }
 ];
 const TEAM_COLORS = ['#E63946','#457B9D','#2A9D8F','#E9C46A','#F4A261','#264653','#6A4C93','#1D3557'];
+const CATEGORIAS = [
+  { value: 'U11', label: 'U11 (≤11)' },
+  { value: 'U14', label: 'U14 (12-14)' },
+  { value: 'U16', label: 'U16 (15-16)' },
+  { value: 'U19', label: 'U19 (17-19)' },
+  { value: 'OPN', label: 'PRIMERA (20+)' }
+];
+const GENEROS = [
+  { value: 'femenino', label: 'Femenino' },
+  { value: 'masculino', label: 'Masculino' },
+  { value: 'mixto', label: 'Mixto' }
+];
 
 // ═══════════════════════════════════════════════════════════════
 //  STATE
@@ -422,7 +447,7 @@ let timerInterval = null;
 
 // Challenge
 let eightCount = 0;
-let timeLeft = 90;
+let timeLeft = 60;
 let challengeActive = false;
 let positions = [];
 const MAX_TRAIL = 60;
@@ -527,7 +552,7 @@ function goTo(id) {
 
   if (id === 'screen-teams') loadTeams();
   if (id === 'screen-settings') renderSettings();
-  if (id === 'screen-create-team') renderColorPicker();
+  if (id === 'screen-create-team') renderCreateTeamForm();
   if (id === 'screen-roster') loadRoster();
   if (id === 'screen-player') loadPlayerProfile();
   if (id === 'screen-tests') renderTests();
@@ -674,14 +699,41 @@ function openTeam(id) {
 }
 
 var selectedColor = TEAM_COLORS[0];
+var selectedCategoria = '';
+var selectedGenero = 'femenino';
 
-function renderColorPicker() {
+function renderCreateTeamForm() {
   document.getElementById('ct-nombre').value = '';
   document.getElementById('ct-error').style.display = 'none';
   selectedColor = TEAM_COLORS[0];
+  selectedCategoria = '';
+  selectedGenero = 'femenino';
   document.getElementById('ct-colors').innerHTML = TEAM_COLORS.map(function(c) {
     return '<div class="color-dot ' + (c === selectedColor ? 'selected' : '') + '" style="background:' + c + '" onclick="pickColor(\'' + c + '\')"></div>';
   }).join('');
+  renderCategoriaChips();
+  renderGeneroChips();
+  updateCtSubmit();
+}
+
+function renderCategoriaChips() {
+  document.getElementById('ct-categoria').innerHTML = CATEGORIAS.map(function(cat) {
+    return '<div class="chip ' + (cat.value === selectedCategoria ? 'selected' : '') + '" onclick="pickCategoria(\'' + cat.value + '\')">' + cat.label + '</div>';
+  }).join('');
+}
+function pickCategoria(v) { selectedCategoria = v; renderCategoriaChips(); updateCtSubmit(); }
+
+function renderGeneroChips() {
+  document.getElementById('ct-genero').innerHTML = GENEROS.map(function(g) {
+    return '<div class="chip ' + (g.value === selectedGenero ? 'selected' : '') + '" onclick="pickGenero(\'' + g.value + '\')">' + g.label + '</div>';
+  }).join('');
+}
+function pickGenero(v) { selectedGenero = v; renderGeneroChips(); }
+
+function updateCtSubmit() {
+  var btn = document.getElementById('ct-submit');
+  if (!selectedCategoria) { btn.textContent = 'Elegí una categoría'; }
+  else { btn.textContent = 'CREAR EQUIPO'; }
 }
 
 function pickColor(c) {
@@ -694,10 +746,13 @@ function pickColor(c) {
 async function createTeam() {
   var nombre = document.getElementById('ct-nombre').value.trim();
   if (!nombre) { showToast('Ingresa un nombre'); return; }
+  if (!selectedCategoria) { showToast('Elegí una categoría'); return; }
   var res = await sb.from('equipos').insert({
     nombre: nombre,
     coach_responsable_id: currentUser.id,
-    color: selectedColor
+    color: selectedColor,
+    categoria: selectedCategoria,
+    genero: selectedGenero
   }).select().single();
   if (res.error) {
     document.getElementById('ct-error').textContent = res.error.message;
@@ -1692,7 +1747,7 @@ function renderResult() {
     selectedTest ? selectedTest.code + ' \u2014 ' + selectedTest.name + ': ' + selectedTest.sub : '';
   document.getElementById('result-player').textContent =
     currentPlayer ? currentPlayer.nombre + ' ' + currentPlayer.apellido : '';
-  document.getElementById('result-duration').textContent = selectedTest ? selectedTest.duration : 90;
+  document.getElementById('result-duration').textContent = selectedTest ? selectedTest.duration : 60;
   document.getElementById('result-count').textContent = resultadoIA;
   document.getElementById('result-final').textContent = resultadoPrincipal;
   document.getElementById('result-corrected').style.display = 'none';
