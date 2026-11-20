@@ -73,6 +73,21 @@ input,select{font-family:inherit}
 .chip{padding:8px 16px;border-radius:20px;border:1px solid #333;background:transparent;color:#aaa;font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:500;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;transition:all .15s}
 .chip.selected{background:#E63946;border-color:#E63946;color:#fff}
 
+/* ═══ METRIC CARDS ═══ */
+.metric-section{margin-bottom:16px}
+.metric-title{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:#6B6B6B;margin-bottom:8px}
+.metric-card{background:#111;border:1px solid #1a1a1a;border-radius:10px;padding:14px;margin-bottom:8px}
+.metric-row{display:flex;justify-content:space-between;align-items:center}
+.metric-label{font-family:'Barlow Condensed',sans-serif;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#aaa}
+.metric-value{font-family:'Bebas Neue',sans-serif;font-size:22px;color:#F5F5F5}
+.metric-value.accent{color:#E63946}
+.metric-value.gold{color:#FFD600}
+.metric-value.green{color:#2A9D8F}
+.metric-bar-bg{height:6px;background:#1a1a1a;border-radius:3px;margin-top:6px;overflow:hidden}
+.metric-bar{height:100%;border-radius:3px;transition:width .3s}
+.metric-note{font-family:'Barlow Condensed',sans-serif;font-size:11px;color:#555;margin-top:4px}
+.metric-warn{color:#E63946}
+
 /* ═══ AVATAR ═══ */
 .avatar{width:40px;height:40px;border-radius:50%;background:#1f1f1f;color:#E63946;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .avatar-lg{width:64px;height:64px;font-size:24px}
@@ -119,6 +134,9 @@ input,select{font-family:inherit}
 .hist-date{font-family:'Barlow Condensed',sans-serif;font-size:12px;color:#6B6B6B;text-transform:uppercase;letter-spacing:.08em}
 .hist-value{font-family:'Bebas Neue',sans-serif;font-size:24px;color:#FFD600}
 .hist-test{font-family:'Barlow Condensed',sans-serif;font-size:11px;color:#6B6B6B;text-transform:uppercase;letter-spacing:.1em}
+.hist-expandable{cursor:pointer}
+.hist-expandable:active{background:#1a1a1a}
+.eval-detail{padding:0 4px;border-bottom:1px solid #1a1a1a}
 
 /* ═══ SPARK CHART ═══ */
 .spark-container{background:#111;border:1px solid #1a1a1a;border-radius:10px;padding:16px;margin-top:12px}
@@ -362,8 +380,10 @@ input,select{font-family:inherit}
       <button class="correction-btn" onclick="correctResult(1)">+</button>
     </div>
     <div id="result-corrected" class="muted" style="font-size:11px;display:none">CORREGIDO MANUALMENTE</div>
-    <div style="width:100%;max-width:300px;margin-top:32px">
+    <div id="result-metrics" style="width:100%;max-width:380px;margin-top:20px"></div>
+    <div style="width:100%;max-width:300px;margin-top:24px">
       <button onclick="saveEvaluacion()" class="btn-primary">GUARDAR RESULTADO</button>
+      <button id="btn-download-video" onclick="downloadVideo()" class="btn-ghost" style="margin-top:10px;display:none">DESCARGAR VIDEO</button>
       <button onclick="discardResult()" class="btn-ghost" style="margin-top:10px">DESCARTAR</button>
     </div>
   </div>
@@ -374,6 +394,7 @@ input,select{font-family:inherit}
   <div class="screen-header"><h1>PERFIL</h1></div>
   <div class="scroll-content">
     <div id="settings-profile"></div>
+    <div id="settings-ia-precision"></div>
     <div class="divider" style="margin:20px 0"></div>
     <button onclick="logout()" class="btn-ghost" style="color:#E63946;border-color:#E63946">CERRAR SESION</button>
   </div>
@@ -456,6 +477,22 @@ const MAX_TRAIL = 60;
 let resultadoIA = 0;
 let resultadoPrincipal = 0;
 let corregido = false;
+let datosCalc = null;
+
+// Analytics (A)
+let challengeStartMs = 0;
+let ochosTimestamps = [];
+let crucesTimestamps = [];
+let trajectoryLog = [];
+let lastTrajectoryLogTime = 0;
+let lostIntervals = [];
+let lastRealDetectionMs = 0;
+let currentLostStart = null;
+
+// Video recording (B)
+let mediaRecorder = null;
+let recordedChunks = [];
+let recordedBlob = null;
 
 // Cones
 let coneA = null;
@@ -924,11 +961,85 @@ async function loadPlayerProfile() {
   if (!playerEvals.length) {
     histEl.innerHTML = '<div class="muted" style="text-align:center;padding:20px;font-size:13px">Sin evaluaciones aun</div>';
   } else {
-    histEl.innerHTML = playerEvals.map(function(e) {
-      return '<div class="hist-row"><div><div class="hist-test">' + escHtml(e.tipo_test.replace('_', ' ')) + '</div>' +
-        '<div class="hist-date">' + formatDate(e.fecha) + '</div></div>' +
+    var firstExpanded = false;
+    histEl.innerHTML = playerEvals.map(function(e, idx) {
+      var hasDatos = e.datos_calculados && e.datos_calculados.ochos_t;
+      var expanded = hasDatos && !firstExpanded;
+      if (expanded) firstExpanded = true;
+      var row = '<div class="hist-row' + (hasDatos ? ' hist-expandable' : '') + '"' +
+        (hasDatos ? ' onclick="toggleEvalDetail(\'' + e.id + '\')"' : '') + '>' +
+        '<div><div class="hist-test">' + escHtml(e.tipo_test.replace('_', ' ')) + '</div>' +
+        '<div class="hist-date">' + formatDate(e.fecha) + (hasDatos ? ' \u00B7 \u25BC' : '') + '</div></div>' +
         '<div class="hist-value">' + e.resultado_principal + '</div></div>';
+      row += '<div id="eval-detail-' + e.id + '" class="eval-detail"' +
+        (expanded ? '' : ' style="display:none"') + '></div>';
+      return row;
     }).join('');
+
+    // Render metrics for the first expanded evaluation
+    playerEvals.forEach(function(e) {
+      if (e.datos_calculados && e.datos_calculados.ochos_t) {
+        renderEvalDetail(e);
+      }
+    });
+  }
+}
+
+function toggleEvalDetail(evalId) {
+  var el = document.getElementById('eval-detail-' + evalId);
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function renderEvalDetail(ev) {
+  var el = document.getElementById('eval-detail-' + ev.id);
+  if (!el || !ev.datos_calculados) return;
+  var dc = ev.datos_calculados;
+  var m = computeMetrics(dc);
+  if (!m) { el.innerHTML = '<div class="metric-note">Datos insuficientes para m\u00E9tricas</div>'; return; }
+
+  var html = '<div style="padding:8px 0">';
+
+  // Mini summary: regularidad + caída + simetría
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center;margin-bottom:10px">';
+  var regColor = m.regularidad >= 70 ? '#2A9D8F' : m.regularidad >= 40 ? '#F4A261' : '#E63946';
+  html += '<div><div class="metric-value" style="font-size:20px;color:' + regColor + '">' + m.regularidad + '</div><div class="metric-label" style="font-size:9px">REGULARIDAD</div></div>';
+  if (m.caida !== null) {
+    var caidaColor = m.caida > 30 ? '#E63946' : m.caida > 15 ? '#F4A261' : '#2A9D8F';
+    html += '<div><div class="metric-value" style="font-size:20px;color:' + caidaColor + '">' + m.caida + '%</div><div class="metric-label" style="font-size:9px">CAIDA RITMO</div></div>';
+  } else {
+    html += '<div></div>';
+  }
+  if (m.simetria) {
+    var simColor = m.simetria.pctDiff <= 10 ? '#2A9D8F' : m.simetria.pctDiff <= 25 ? '#F4A261' : '#E63946';
+    html += '<div><div class="metric-value" style="font-size:20px;color:' + simColor + '">' + m.simetria.pctDiff + '%</div><div class="metric-label" style="font-size:9px">ASIMETRIA</div></div>';
+  } else {
+    html += '<div></div>';
+  }
+  html += '</div>';
+
+  // Ritmo bars
+  var maxT = Math.max.apply(null, m.tramos) || 1;
+  html += '<div style="display:flex;gap:4px;height:32px;align-items:flex-end;margin-bottom:4px">';
+  for (var i = 0; i < 4; i++) {
+    var hPct = Math.max(4, Math.round(m.tramos[i] / maxT * 100));
+    html += '<div style="flex:1;height:' + hPct + '%;background:' + (i === 3 && m.caida > 30 ? '#E63946' : '#FFD600') + ';border-radius:2px;position:relative">' +
+      '<span style="position:absolute;top:-12px;left:50%;transform:translateX(-50%);font-size:9px;color:#aaa">' + m.tramos[i] + '</span></div>';
+  }
+  html += '</div>';
+  html += '<div style="display:flex;gap:4px"><span class="metric-label" style="flex:1;text-align:center;font-size:8px">0-15</span><span class="metric-label" style="flex:1;text-align:center;font-size:8px">15-30</span><span class="metric-label" style="flex:1;text-align:center;font-size:8px">30-45</span><span class="metric-label" style="flex:1;text-align:center;font-size:8px">45-60</span></div>';
+
+  // Mini trajectory
+  if (dc.tray && dc.tray.length > 10) {
+    var canvasId = 'tray-mini-' + ev.id;
+    html += '<canvas id="' + canvasId + '" width="300" height="180" style="width:100%;margin-top:8px;border-radius:6px"></canvas>';
+  }
+
+  html += '</div>';
+  el.innerHTML = html;
+
+  if (dc.tray && dc.tray.length > 10) {
+    setTimeout(function() { drawTrajectory('tray-mini-' + ev.id, dc); }, 50);
   }
 }
 
@@ -1020,6 +1131,44 @@ function renderSettings() {
     escHtml(name) + '</div><div class="muted" style="font-size:13px">' + escHtml(currentUser ? currentUser.email : '') + '</div>' +
     '<div class="muted" style="font-family:\'Barlow Condensed\',sans-serif;font-size:12px;text-transform:uppercase;letter-spacing:.1em;margin-top:4px">' +
     escHtml(coachProfile ? coachProfile.club_texto || '' : '') + '</div></div></div>';
+  renderIAPrecision();
+}
+
+async function renderIAPrecision() {
+  var el = document.getElementById('settings-ia-precision');
+  if (!el || !currentUser) { if (el) el.innerHTML = ''; return; }
+  var r = await sb.from('evaluaciones')
+    .select('resultado_principal, resultado_ia')
+    .eq('coach_id', currentUser.id)
+    .not('resultado_ia', 'is', null);
+  var data = r.data || [];
+  if (data.length < 3) { el.innerHTML = ''; return; }
+
+  var errores = data.map(function(d) { return d.resultado_principal - d.resultado_ia; });
+  var absErrors = errores.map(function(e) { return Math.abs(e); });
+  var total = data.length;
+  var errorProm = (absErrors.reduce(function(a, b) { return a + b; }, 0) / total).toFixed(1);
+  var exactos = errores.filter(function(e) { return e === 0; }).length;
+  var pctExactos = Math.round(exactos / total * 100);
+  var dentroDe2 = errores.filter(function(e) { return Math.abs(e) <= 2; }).length;
+  var pctDentroDe2 = Math.round(dentroDe2 / total * 100);
+  var tendenciaProm = (errores.reduce(function(a, b) { return a + b; }, 0) / total);
+  var tendenciaLabel = Math.abs(tendenciaProm) < 0.15 ? 'Equilibrada' :
+    (tendenciaProm > 0 ? 'Cuenta ' + tendenciaProm.toFixed(1) + ' de menos' : 'Cuenta ' + Math.abs(tendenciaProm).toFixed(1) + ' de m\u00E1s') + ' en promedio';
+
+  var pctColor = pctExactos >= 60 ? '#2A9D8F' : pctExactos >= 30 ? '#F4A261' : '#E63946';
+  el.innerHTML =
+    '<div class="divider" style="margin:20px 0"></div>' +
+    '<div class="metric-section"><div class="metric-title">PRECISION DE LA IA</div>' +
+    '<div class="metric-card">' +
+    '<div style="text-align:center;margin-bottom:12px"><div class="metric-value" style="font-size:36px;color:' + pctColor + '">' + pctExactos + '%</div><div class="metric-label">EXACTOS</div></div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">' +
+    '<div><div class="metric-value" style="font-size:18px">' + errorProm + '</div><div class="metric-label" style="font-size:10px">ERROR PROM</div></div>' +
+    '<div><div class="metric-value" style="font-size:18px">' + pctDentroDe2 + '%</div><div class="metric-label" style="font-size:10px">\u00B1 2 O MENOS</div></div>' +
+    '<div><div class="metric-value" style="font-size:18px">' + total + '</div><div class="metric-label" style="font-size:10px">TESTS</div></div>' +
+    '</div>' +
+    '<div class="metric-note" style="text-align:center;margin-top:8px">Tendencia: ' + escHtml(tendenciaLabel) + '</div>' +
+    '</div></div>';
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1131,6 +1280,7 @@ function detectEight(newPos) {
   var justCrossed = false;
   if (lastCenterSide && currentSide !== 'center' && lastCenterSide !== currentSide && lastCenterSide !== 'center') {
     justCrossed = true; centerCrossings++;
+    if (challengeActive) crucesTimestamps.push({ t: +((Date.now() - challengeStartMs) / 1000).toFixed(1), side: currentSide });
   }
   if (currentSide !== 'center') lastCenterSide = currentSide;
 
@@ -1189,6 +1339,7 @@ function detectEight(newPos) {
 function registerEight() {
   if (!challengeActive) return;
   eightCount++;
+  ochosTimestamps.push(+((Date.now() - challengeStartMs) / 1000).toFixed(1));
   playEightSound();
   document.getElementById('hud-counter').textContent = eightCount;
   var statusEl = document.getElementById('status-bar');
@@ -1588,6 +1739,20 @@ function startDetectionLoop() {
       lastBallSize = Math.max(detected.w, detected.h);
     }
 
+    // Analytics: lost intervals
+    if (challengeActive) {
+      if (detected && !detected.predicted) {
+        lastRealDetectionMs = Date.now();
+        if (currentLostStart !== null) {
+          var lostEnd = +((Date.now() - challengeStartMs) / 1000).toFixed(1);
+          if (lostEnd - currentLostStart >= 0.3) lostIntervals.push({ start: currentLostStart, end: lostEnd });
+          currentLostStart = null;
+        }
+      } else if (currentLostStart === null && Date.now() - lastRealDetectionMs > 300) {
+        currentLostStart = +((lastRealDetectionMs - challengeStartMs) / 1000).toFixed(1);
+      }
+    }
+
     // Draw overlay
     overlayCtx.clearRect(0, 0, vW, vH);
     drawCones(vW, vH);
@@ -1595,6 +1760,21 @@ function startDetectionLoop() {
     if (smoothBall) {
       positions.push({ x: smoothBall.x, y: smoothBall.y });
       if (positions.length > MAX_TRAIL) positions.shift();
+
+      // Analytics: trajectory log every 100ms
+      if (challengeActive && coneA && coneB && now - lastTrajectoryLogTime >= 100) {
+        lastTrajectoryLogTime = now;
+        var cdx = coneB.x - coneA.x, cdy = coneB.y - coneA.y;
+        var cdist2 = cdx * cdx + cdy * cdy || 1;
+        var bx = smoothBall.x - coneA.x, by = smoothBall.y - coneA.y;
+        var nx = (bx * cdx + by * cdy) / cdist2;
+        var ny = (-bx * cdy + by * cdx) / cdist2;
+        trajectoryLog.push({
+          t: +((now - challengeStartMs) / 1000).toFixed(1),
+          x: +nx.toFixed(3), y: +ny.toFixed(3),
+          p: detected && detected.predicted ? 1 : 0
+        });
+      }
 
       // Trail
       if (positions.length >= 2) {
@@ -1735,7 +1915,12 @@ function startCountdown() {
       overlay.style.display = 'none';
       clearInterval(ci);
       challengeActive = true;
+      challengeStartMs = Date.now();
+      ochosTimestamps = []; crucesTimestamps = []; trajectoryLog = [];
+      lostIntervals = []; lastRealDetectionMs = challengeStartMs; currentLostStart = null;
+      datosCalc = null; recordedBlob = null;
       startChallengeTimer();
+      startVideoRecording();
       playBeep(880, 0.2, 'sine', 0.5);
       document.getElementById('status-bar').textContent = '\uD83C\uDFD1 \u00A1Dale, hace ochos!';
       document.getElementById('status-bar').className = 'status-bar detected';
@@ -1761,14 +1946,81 @@ function startChallengeTimer() {
   }, 1000);
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  VIDEO RECORDING
+// ═══════════════════════════════════════════════════════════════
+function startVideoRecording() {
+  if (!stream) return;
+  recordedChunks = [];
+  recordedBlob = null;
+  try {
+    var mimeType = 'video/webm;codecs=vp9';
+    if (typeof MediaRecorder === 'undefined') return;
+    if (!MediaRecorder.isTypeSupported(mimeType)) {
+      mimeType = 'video/webm;codecs=vp8';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'video/mp4';
+        if (!MediaRecorder.isTypeSupported(mimeType)) return;
+      }
+    }
+    mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType, videoBitsPerSecond: 1000000 });
+    mediaRecorder.ondataavailable = function(e) { if (e.data && e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.start(1000);
+  } catch(e) { console.warn('MediaRecorder not available:', e); }
+}
+
+function stopVideoRecording() {
+  if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+  try {
+    mediaRecorder.requestData();
+    mediaRecorder.stop();
+  } catch(e) {}
+  setTimeout(function() {
+    if (recordedChunks.length > 0) {
+      recordedBlob = new Blob(recordedChunks, { type: recordedChunks[0].type || 'video/webm' });
+    }
+    var btn = document.getElementById('btn-download-video');
+    if (btn && recordedBlob) btn.style.display = 'block';
+  }, 400);
+}
+
+function downloadVideo() {
+  if (!recordedBlob) return;
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(recordedBlob);
+  a.download = 'T1_' + (currentPlayer ? currentPlayer.apellido : 'test') + '_' + new Date().toISOString().slice(0,10) + '.webm';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
 function endChallenge() {
   challengeActive = false;
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+
+  // Close open lost interval
+  if (currentLostStart !== null) {
+    var endSec = selectedTest ? selectedTest.duration : 60;
+    if (endSec - currentLostStart >= 0.3) lostIntervals.push({ start: currentLostStart, end: +endSec.toFixed(1) });
+    currentLostStart = null;
+  }
+
+  // Build analytics payload
+  datosCalc = {
+    ochos_t: ochosTimestamps,
+    cruces_t: crucesTimestamps,
+    tray: trajectoryLog,
+    perdidas: lostIntervals,
+    conos: coneA && coneB ? { a: { x: +coneA.x.toFixed(1), y: +coneA.y.toFixed(1) }, b: { x: +coneB.x.toFixed(1), y: +coneB.y.toFixed(1) } } : null,
+    video: videoEl ? { w: videoEl.videoWidth, h: videoEl.videoHeight } : null
+  };
+
   resultadoIA = eightCount;
   resultadoPrincipal = eightCount;
   corregido = false;
   playBeep(440, 0.3, 'sine', 0.5);
   setTimeout(function() { playBeep(330, 0.4, 'sine', 0.4); }, 300);
+  stopVideoRecording();
   stopCamera();
   goTo('screen-result');
   renderResult();
@@ -1792,6 +2044,8 @@ function renderResult() {
   document.getElementById('result-count').textContent = resultadoIA;
   document.getElementById('result-final').textContent = resultadoPrincipal;
   document.getElementById('result-corrected').style.display = 'none';
+  document.getElementById('btn-download-video').style.display = recordedBlob ? 'block' : 'none';
+  renderMetrics(datosCalc);
 }
 
 function correctResult(delta) {
@@ -1799,6 +2053,205 @@ function correctResult(delta) {
   document.getElementById('result-final').textContent = resultadoPrincipal;
   corregido = resultadoPrincipal !== resultadoIA;
   document.getElementById('result-corrected').style.display = corregido ? 'block' : 'none';
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  METRICS COMPUTATION
+// ═══════════════════════════════════════════════════════════════
+function computeMetrics(dc) {
+  if (!dc || !dc.ochos_t || dc.ochos_t.length < 2) return null;
+  var ot = dc.ochos_t, ct = dc.cruces_t || [], perdidas = dc.perdidas || [];
+
+  // C1: Ritmo por tramo
+  var tramos = [0, 0, 0, 0];
+  ot.forEach(function(t) { tramos[Math.min(3, (t / 15) | 0)]++; });
+  var caida = tramos[0] > 0 ? Math.round((1 - tramos[3] / tramos[0]) * 100) : null;
+
+  // C2: Regularidad
+  var intervals = [];
+  for (var i = 1; i < ot.length; i++) intervals.push(ot[i] - ot[i - 1]);
+  var mean = intervals.reduce(function(a, b) { return a + b; }, 0) / intervals.length;
+  var variance = intervals.reduce(function(a, b) { return a + (b - mean) * (b - mean); }, 0) / intervals.length;
+  var std = Math.sqrt(variance);
+  var cv = mean > 0 ? std / mean : 0;
+  var regularidad = Math.round(Math.max(0, Math.min(100, 100 * (1 - cv))));
+
+  // C3: Desconcentraciones
+  var sortedInt = intervals.slice().sort(function(a, b) { return a - b; });
+  var mediana = sortedInt[Math.floor(sortedInt.length / 2)];
+  var umbral = mediana * 1.6;
+  var desconc = [];
+  for (var j = 0; j < intervals.length; j++) {
+    if (intervals[j] > umbral) {
+      var tOcho = ot[j + 1];
+      var enPerdida = perdidas.some(function(p) { return tOcho >= p.start && ot[j] <= p.end; });
+      desconc.push({ ocho: j + 2, segundo: tOcho, sinDatos: enPerdida });
+    }
+  }
+
+  // C4: Simetría
+  var simetria = null;
+  if (ct.length >= 4) {
+    var leftHalves = [], rightHalves = [];
+    for (var k = 0; k + 1 < ct.length; k++) {
+      var dur = ct[k + 1].t - ct[k].t;
+      if (dur <= 0) continue;
+      var toSide = ct[k].side;
+      if (toSide === 'left') leftHalves.push(dur);
+      else if (toSide === 'right') rightHalves.push(dur);
+    }
+    if (leftHalves.length > 0 && rightHalves.length > 0) {
+      var avgL = leftHalves.reduce(function(a, b) { return a + b; }, 0) / leftHalves.length;
+      var avgR = rightHalves.reduce(function(a, b) { return a + b; }, 0) / rightHalves.length;
+      var maxAvg = Math.max(avgL, avgR);
+      simetria = {
+        pctDiff: maxAvg > 0 ? Math.round(Math.abs(avgL - avgR) / maxAvg * 100) : 0,
+        ladoLento: avgL > avgR ? 'izquierda' : avgR > avgL ? 'derecha' : null,
+        avgL: +avgL.toFixed(2), avgR: +avgR.toFixed(2)
+      };
+    }
+  }
+
+  return { tramos: tramos, caida: caida, regularidad: regularidad, desconc: desconc, simetria: simetria, mediana: +mediana.toFixed(2) };
+}
+
+function renderMetrics(dc) {
+  var el = document.getElementById('result-metrics');
+  if (!el) return;
+  var m = computeMetrics(dc);
+  if (!m) { el.innerHTML = ''; return; }
+
+  var html = '';
+
+  // C1: Ritmo
+  var maxTramo = Math.max.apply(null, m.tramos) || 1;
+  html += '<div class="metric-section"><div class="metric-title">RITMO POR TRAMO</div><div class="metric-card">';
+  var tramoLabels = ['0-15s', '15-30s', '30-45s', '45-60s'];
+  for (var i = 0; i < 4; i++) {
+    var pct = Math.round(m.tramos[i] / maxTramo * 100);
+    html += '<div class="metric-row" style="margin-bottom:4px"><span class="metric-label">' + tramoLabels[i] + '</span><span class="metric-label" style="color:#F5F5F5">' + m.tramos[i] + '</span></div>';
+    html += '<div class="metric-bar-bg"><div class="metric-bar" style="width:' + pct + '%;background:' + (i === 3 && m.caida > 30 ? '#E63946' : '#FFD600') + '"></div></div>';
+  }
+  if (m.caida !== null) {
+    var caidaColor = m.caida > 30 ? '#E63946' : m.caida > 15 ? '#F4A261' : '#2A9D8F';
+    html += '<div class="metric-row" style="margin-top:8px"><span class="metric-label">CAIDA DE RITMO</span><span class="metric-value" style="font-size:18px;color:' + caidaColor + '">' + m.caida + '%</span></div>';
+  }
+  html += '</div></div>';
+
+  // C2: Regularidad
+  var regColor = m.regularidad >= 70 ? '#2A9D8F' : m.regularidad >= 40 ? '#F4A261' : '#E63946';
+  html += '<div class="metric-section"><div class="metric-title">REGULARIDAD</div><div class="metric-card">';
+  html += '<div class="metric-row"><span class="metric-label">CONSTANCIA</span><span class="metric-value" style="color:' + regColor + '">' + m.regularidad + '<span style="font-size:14px">/100</span></span></div>';
+  html += '<div class="metric-bar-bg"><div class="metric-bar" style="width:' + m.regularidad + '%;background:' + regColor + '"></div></div>';
+  html += '<div class="metric-note">Mediana entre ochos: ' + m.mediana + 's</div>';
+  html += '</div></div>';
+
+  // C3: Desconcentraciones
+  if (m.desconc.length > 0) {
+    html += '<div class="metric-section"><div class="metric-title">DESCONCENTRACIONES</div><div class="metric-card">';
+    m.desconc.forEach(function(d) {
+      if (d.sinDatos) {
+        html += '<div class="metric-note" style="margin-bottom:4px">Ocho #' + d.ocho + ' (seg ' + d.segundo + ') \u2014 sin datos (la IA perdi\u00F3 la bocha)</div>';
+      } else {
+        html += '<div class="metric-note metric-warn" style="margin-bottom:4px">Ocho #' + d.ocho + ' (seg ' + d.segundo + ') \u2014 lento</div>';
+      }
+    });
+    html += '</div></div>';
+  }
+
+  // C4: Simetría
+  if (m.simetria) {
+    var simColor = m.simetria.pctDiff <= 10 ? '#2A9D8F' : m.simetria.pctDiff <= 25 ? '#F4A261' : '#E63946';
+    html += '<div class="metric-section"><div class="metric-title">SIMETRIA</div><div class="metric-card">';
+    if (m.simetria.pctDiff <= 5) {
+      html += '<div class="metric-row"><span class="metric-label">EQUILIBRADO</span><span class="metric-value" style="font-size:18px;color:#2A9D8F">\u2714</span></div>';
+    } else {
+      html += '<div class="metric-row"><span class="metric-label">' + m.simetria.ladoLento.toUpperCase() + ' MAS LENTA</span><span class="metric-value" style="font-size:18px;color:' + simColor + '">+' + m.simetria.pctDiff + '%</span></div>';
+    }
+    html += '<div class="metric-note">Izq: ' + m.simetria.avgL + 's \u00B7 Der: ' + m.simetria.avgR + 's (promedio por mitad)</div>';
+    html += '</div></div>';
+  }
+
+  // C5: Recorrido (trayectoria)
+  if (dc.tray && dc.tray.length > 10) {
+    html += '<div class="metric-section"><div class="metric-title">RECORRIDO</div>';
+    html += '<div class="metric-card" style="padding:8px"><canvas id="canvas-trayectoria" width="360" height="220" style="width:100%;border-radius:8px"></canvas></div></div>';
+  }
+
+  el.innerHTML = html;
+
+  // Draw trajectory after DOM update
+  if (dc.tray && dc.tray.length > 10) {
+    setTimeout(function() { drawTrajectory('canvas-trayectoria', dc); }, 50);
+  }
+}
+
+function drawTrajectory(canvasId, dc) {
+  var canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  var ctx = canvas.getContext('2d');
+  var W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // Background
+  ctx.fillStyle = '#0A0A0A';
+  ctx.fillRect(0, 0, W, H);
+
+  // Map normalized coords to canvas: x in [-0.3, 1.3], y in [-0.6, 0.6]
+  var xMin = -0.3, xMax = 1.3, yMin = -0.6, yMax = 0.6;
+  function mapX(nx) { return ((nx - xMin) / (xMax - xMin)) * W; }
+  function mapY(ny) { return ((ny - yMin) / (yMax - yMin)) * H; }
+
+  // Center line
+  ctx.setLineDash([6, 4]);
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(mapX(0.5), 0);
+  ctx.lineTo(mapX(0.5), H);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Cones
+  var coneR = 10;
+  ctx.beginPath(); ctx.arc(mapX(0), mapY(0), coneR, 0, Math.PI * 2);
+  ctx.fillStyle = '#E63946'; ctx.fill();
+  ctx.beginPath(); ctx.arc(mapX(1), mapY(0), coneR, 0, Math.PI * 2);
+  ctx.fillStyle = '#E63946'; ctx.fill();
+  ctx.font = '10px "Barlow Condensed"';
+  ctx.fillStyle = '#aaa'; ctx.textAlign = 'center';
+  ctx.fillText('A', mapX(0), mapY(0) + coneR + 12);
+  ctx.fillText('B', mapX(1), mapY(0) + coneR + 12);
+
+  // Trajectory path
+  var tray = dc.tray;
+  var totalT = tray[tray.length - 1].t || 1;
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (var i = 1; i < tray.length; i++) {
+    var progress = tray[i].t / totalT;
+    var r = Math.round(255 * (1 - progress) + 42 * progress);
+    var g = Math.round(214 * (1 - progress) + 157 * progress);
+    var b = Math.round(0 * (1 - progress) + 143 * progress);
+    ctx.strokeStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + (tray[i].p ? 0.25 : 0.7) + ')';
+    ctx.beginPath();
+    ctx.moveTo(mapX(tray[i - 1].x), mapY(tray[i - 1].y));
+    ctx.lineTo(mapX(tray[i].x), mapY(tray[i].y));
+    ctx.stroke();
+  }
+
+  // Lost intervals as red zones
+  var perdidas = dc.perdidas || [];
+  perdidas.forEach(function(p) {
+    var pts = tray.filter(function(pt) { return pt.t >= p.start && pt.t <= p.end; });
+    pts.forEach(function(pt) {
+      ctx.beginPath();
+      ctx.arc(mapX(pt.x), mapY(pt.y), 3, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(230,57,70,0.6)';
+      ctx.fill();
+    });
+  });
 }
 
 async function saveEvaluacion() {
@@ -1812,7 +2265,8 @@ async function saveEvaluacion() {
     resultado_principal: resultadoPrincipal,
     resultado_ia: resultadoIA,
     corregido: corregido,
-    estado: 'valido'
+    estado: 'valido',
+    datos_calculados: datosCalc
   });
   if (res.error) { showToast('Error al guardar: ' + res.error.message); return; }
   showToast('Resultado guardado');
