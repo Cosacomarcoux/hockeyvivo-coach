@@ -472,7 +472,7 @@ let eightCount = 0;
 let timeLeft = 60;
 let challengeActive = false;
 let positions = [];
-const MAX_TRAIL = 120;
+const TRAIL_DURATION_MS = 2000;
 let resultadoIA = 0;
 let resultadoPrincipal = 0;
 let corregido = false;
@@ -1762,8 +1762,9 @@ function startDetectionLoop() {
     drawCones(vW, vH);
 
     if (smoothBall) {
-      positions.push({ x: smoothBall.x, y: smoothBall.y });
-      if (positions.length > MAX_TRAIL) positions.shift();
+      positions.push({ x: smoothBall.x, y: smoothBall.y, t: now });
+      // Prune points older than TRAIL_DURATION_MS
+      while (positions.length > 0 && now - positions[0].t > TRAIL_DURATION_MS) positions.shift();
 
       // Analytics: trajectory log every 100ms
       if (challengeActive && coneA && coneB && now - lastTrajectoryLogTime >= 100) {
@@ -1780,7 +1781,7 @@ function startDetectionLoop() {
         });
       }
 
-      // Trail
+      // Trail (time-based alpha: oldest=0, newest=0.9)
       if (positions.length >= 2) {
         var pts = [positions[0]];
         for (var pi = 1; pi < positions.length; pi++) {
@@ -1789,13 +1790,14 @@ function startDetectionLoop() {
           if (Math.sqrt(ddx2*ddx2+ddy2*ddy2) >= 3) pts.push(positions[pi]);
         }
         for (var ti = 1; ti < pts.length; ti++) {
-          var alpha = ti / pts.length;
+          var age = now - pts[ti].t;
+          var alpha = Math.max(0, 1 - age / TRAIL_DURATION_MS) * 0.9;
           overlayCtx.beginPath();
           if (ti === 1) { overlayCtx.moveTo(pts[0].x, pts[0].y); }
           else { overlayCtx.moveTo((pts[ti-2].x+pts[ti-1].x)/2, (pts[ti-2].y+pts[ti-1].y)/2); }
           overlayCtx.quadraticCurveTo(pts[ti-1].x, pts[ti-1].y, (pts[ti-1].x+pts[ti].x)/2, (pts[ti-1].y+pts[ti].y)/2);
-          overlayCtx.strokeStyle = 'rgba(255,214,0,' + (alpha*0.9) + ')';
-          overlayCtx.lineWidth = 2 + alpha*4;
+          overlayCtx.strokeStyle = 'rgba(255,214,0,' + alpha + ')';
+          overlayCtx.lineWidth = 2 + (1 - age / TRAIL_DURATION_MS) * 4;
           overlayCtx.lineCap = 'round';
           overlayCtx.lineJoin = 'round';
           overlayCtx.stroke();
@@ -2133,7 +2135,7 @@ function renderMetrics(dc) {
     html += '<div style="display:flex;justify-content:center;gap:12px;margin-top:6px">';
     html += '<span style="display:flex;align-items:center;gap:4px"><span style="width:14px;height:3px;background:#FFD600;border-radius:1px"></span><span class="metric-label" style="font-size:9px">0-15</span></span>';
     html += '<span style="display:flex;align-items:center;gap:4px"><span style="width:14px;height:3px;background:#F4A261;border-radius:1px"></span><span class="metric-label" style="font-size:9px">15-30</span></span>';
-    html += '<span style="display:flex;align-items:center;gap:4px"><span style="width:14px;height:3px;background:#E63946;border-radius:1px"></span><span class="metric-label" style="font-size:9px">30-45</span></span>';
+    html += '<span style="display:flex;align-items:center;gap:4px"><span style="width:14px;height:3px;background:#6A4C93;border-radius:1px"></span><span class="metric-label" style="font-size:9px">30-45</span></span>';
     html += '<span style="display:flex;align-items:center;gap:4px"><span style="width:14px;height:3px;background:#457B9D;border-radius:1px"></span><span class="metric-label" style="font-size:9px">45-60</span></span>';
     html += '</div>';
     html += '<div style="text-align:center;margin-top:8px"><button id="btn-play-tray" class="btn-ghost" style="font-size:12px;padding:6px 18px" onclick="toggleTrayPlayback(\'canvas-trayectoria\')">&#9654; REPRODUCIR x1</button></div>';
@@ -2148,7 +2150,7 @@ function renderMetrics(dc) {
   }
 }
 
-var TRAY_COLORS = ['#FFD600', '#F4A261', '#E63946', '#457B9D'];
+var TRAY_COLORS = ['#FFD600', '#F4A261', '#6A4C93', '#457B9D'];
 
 function tramoColor(t) {
   var idx = Math.min(3, (t / 15) | 0);
