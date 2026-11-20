@@ -90,11 +90,13 @@ input,select{font-family:inherit}
 /* ═══ TEAM CARD ═══ */
 .team-card{display:flex;align-items:center;gap:14px;padding:16px;background:#111;border:1px solid #1a1a1a;border-radius:12px;margin-bottom:10px;cursor:pointer}
 .team-card:active{background:#1a1a1a}
-.team-color{width:6px;height:44px;border-radius:3px;flex-shrink:0}
+.team-color{width:6px;align-self:stretch;border-radius:3px;flex-shrink:0}
 .team-info{flex:1}
 .team-name{font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:16px;text-transform:uppercase;letter-spacing:.06em}
-.team-meta{font-family:'Barlow Condensed',sans-serif;font-size:11px;color:#6B6B6B;text-transform:uppercase;letter-spacing:.12em;margin-top:3px}
-.team-arrow{color:#6B6B6B;font-size:18px}
+.team-chips{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap}
+.team-chip{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;padding:2px 8px;border-radius:10px;border:1px solid #333;color:#aaa;line-height:1.4}
+.team-meta{font-family:'Barlow Condensed',sans-serif;font-size:11px;color:#6B6B6B;text-transform:uppercase;letter-spacing:.1em;margin-top:5px;display:flex;gap:12px}
+.team-arrow{color:#6B6B6B;font-size:18px;align-self:center}
 
 /* ═══ PLAYER ROW ═══ */
 .player-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #1a1a1a;cursor:pointer}
@@ -668,12 +670,44 @@ function stopCameraIfRunning() {
 // ═══════════════════════════════════════════════════════════════
 //  TEAMS
 // ═══════════════════════════════════════════════════════════════
+var teamStats = {}; // { teamId: { playerCount, lastEval } }
+
 async function loadTeams() {
   document.getElementById('teams-club').textContent = coachProfile ? coachProfile.club_texto || '' : '';
   var res = await sb.from('equipos').select('*').order('creado_en', { ascending: false });
   if (res.error) { showToast('Error cargando equipos'); return; }
   teams = res.data || [];
+
+  // Fetch player counts and last evaluation per team in parallel
+  teamStats = {};
+  if (teams.length) {
+    var ids = teams.map(function(t) { return t.id; });
+    var pRes = await sb.from('plantel_coach').select('equipo_id').in('equipo_id', ids).is('fecha_baja', null);
+    var eRes = await sb.from('evaluaciones').select('equipo_id, fecha').in('equipo_id', ids).order('fecha', { ascending: false });
+    var plantel = pRes.data || [];
+    var evals = eRes.data || [];
+    ids.forEach(function(id) {
+      teamStats[id] = {
+        playerCount: plantel.filter(function(p) { return p.equipo_id === id; }).length,
+        lastEval: null
+      };
+    });
+    evals.forEach(function(ev) {
+      if (ev.equipo_id && teamStats[ev.equipo_id] && !teamStats[ev.equipo_id].lastEval) {
+        teamStats[ev.equipo_id].lastEval = ev.fecha;
+      }
+    });
+  }
   renderTeams();
+}
+
+function categLabel(cat) {
+  if (cat === 'OPN') return 'PRIMERA';
+  return cat || '';
+}
+function generoLabel(g) {
+  if (!g) return '';
+  return g.toUpperCase();
 }
 
 function renderTeams() {
@@ -685,10 +719,17 @@ function renderTeams() {
     return;
   }
   el.innerHTML = teams.map(function(t) {
+    var st = teamStats[t.id] || { playerCount: 0, lastEval: null };
+    var chips = '';
+    if (t.categoria) chips += '<span class="team-chip">' + categLabel(t.categoria) + '</span>';
+    if (t.genero) chips += '<span class="team-chip">' + generoLabel(t.genero) + '</span>';
+    var evalText = st.lastEval ? formatDate(st.lastEval) : 'Sin evaluaciones';
     return '<div class="team-card" onclick="openTeam(\'' + t.id + '\')">' +
       '<div class="team-color" style="background:' + escHtml(t.color || '#E63946') + '"></div>' +
       '<div class="team-info"><div class="team-name">' + escHtml(t.nombre || 'Sin nombre') + '</div>' +
-      '<div class="team-meta">CREADO ' + formatDate(t.creado_en) + '</div></div>' +
+      (chips ? '<div class="team-chips">' + chips + '</div>' : '') +
+      '<div class="team-meta"><span>' + st.playerCount + ' jugadora' + (st.playerCount !== 1 ? 's' : '') + '</span>' +
+      '<span>\u00B7 ' + evalText + '</span></div></div>' +
       '<div class="team-arrow">\u203A</div></div>';
   }).join('');
 }
